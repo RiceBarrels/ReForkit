@@ -1,0 +1,25 @@
+.editor-pre {
+    min-height: 100%;
+    margin: 0 !important;
+    background-color: var(--background);
+    border-radius: 4px;
+}
+
+.editor-textarea {
+    outline: none !important;
+    min-height: 100%;
+}
+
+.line-numbers {
+    font-family: 'Fira code', 'Fira Mono', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    min-width: 3em;
+    padding-top: 10px; /* Match editor padding */
+    border-right: 1px solid var(--border);
+}
+
+.editor-line-number {
+    color: var(--muted-foreground);
+    opacity: 0.5;
+}
