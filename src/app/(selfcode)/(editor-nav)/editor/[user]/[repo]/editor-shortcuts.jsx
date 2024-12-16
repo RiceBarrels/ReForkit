@@ -21,10 +21,11 @@ import {
   CommandShortcut,
 } from "@/components/ui/command"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-export default function EditorShortcuts() {
+import { useRouter, usePathname } from "next/navigation"
+export default function EditorShortcuts({ handleOpenUtilityTabs }) {
     const [open, setOpen] = React.useState(false)
     const router = useRouter()
+    const pathname = usePathname()
     React.useEffect(() => {
       const down = (e) => {
         if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
@@ -32,7 +33,12 @@ export default function EditorShortcuts() {
           setOpen((open) => !open)
         } else if (e.key === "," && (e.metaKey || e.ctrlKey)) {
           e.preventDefault()
-          router.push("/settings")
+          if (pathname?.includes("/editor/")) {
+            handleOpenUtilityTabs('settings');
+            alert("settings")
+          } else {
+            router.push("/settings")
+          }
         } else if (e.key === "h" && (e.metaKey || e.ctrlKey)) {
           e.preventDefault()
           router.push("/")
@@ -44,7 +50,7 @@ export default function EditorShortcuts() {
    
       document.addEventListener("keydown", down)
       return () => document.removeEventListener("keydown", down)
-    }, [])
+    }, [pathname, router, handleOpenUtilityTabs])
    
     return (
       <>

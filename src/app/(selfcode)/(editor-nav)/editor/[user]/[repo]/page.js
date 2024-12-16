@@ -3,29 +3,12 @@
 import React from 'react';
 import { useEffect, useState, useRef } from 'react';
 import { useUser } from '@clerk/nextjs';
-import Editor from 'react-simple-code-editor';
-import Prism from 'prismjs';
-import { highlight, languages } from 'prismjs/components/prism-core';
-
-import 'prismjs/components/prism-clike';
-import 'prismjs/components/prism-python';
-import 'prismjs/components/prism-java';
-import 'prismjs/components/prism-csharp';
-import 'prismjs/components/prism-css';
-import 'prismjs/components/prism-json';
-import 'prismjs/components/prism-markup';
-import 'prismjs/components/prism-yaml';
-import 'prismjs/components/prism-bash';
-import 'prismjs/components/prism-sql';
-import 'prismjs/components/prism-php';
-import 'prismjs/components/prism-javascript';
-import 'prismjs/themes/prism-tomorrow.css';
+import { SortableTab, EmptyTab, DragOverlayTab, CodeEditorTab } from '@/components/tab';
 
 import EditorShortcuts from './editor-shortcuts';
-import { motion } from 'framer-motion';
 import { SidebarProvider } from "@/components/ui/sidebar";
 import Link from "next/link";
-import { Home, Plus, XIcon } from "lucide-react";
+import { Home, Loader2, Plus, X, Folder, Settings} from "lucide-react";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { PiRectangle, PiSidebarFill } from "react-icons/pi";
 import {
@@ -34,9 +17,7 @@ import {
     ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import './editor-styles.css';
-import { FileText, Folder, Settings, PlusCircle, Download, Loader2 } from "lucide-react";
-import { MdDriveFolderUpload, MdOutlineUploadFile } from "react-icons/md";
-import { Separator } from "@/components/ui/separator";
+import { FileText } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -50,315 +31,43 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
+  SidebarMenu
 } from "@/components/ui/sidebar";
 import { fetchGitHubFile } from '@/app/actions/github';
-import { IoClose } from "react-icons/io5";
-import { DndContext, DragOverlay, defaultDropAnimation, defaultDropAnimationSideEffects } from "@dnd-kit/core";
+import { DndContext, DragOverlay} from "@dnd-kit/core";
 import {
   useSensor,
   useSensors,
   PointerSensor,
   KeyboardSensor,
 } from '@dnd-kit/core';
-import { SortableContext, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { arrayMove } from "@dnd-kit/sortable";
+import { SortableContext, horizontalListSortingStrategy} from "@dnd-kit/sortable";
 import { useDroppable } from '@dnd-kit/core';
 import { restrictToWindowEdges } from '@dnd-kit/modifiers';
+import { truncateFileName } from '@/utils/editor-utils';
+import SettingsPage from '@/app/(selfcode)/(regular-nav)/settings/page';
 
-// Menu items for editor navigation
-const editorItems = [
-  {
-    title: "Settings",
-    url: "/settings",
-    icon: Settings,
-    shortcut: "⌘,"
-  },
-]
-
-const getLanguageFromFileName = (filename) => {
-  if (!filename) return 'javascript';
-  
-  const extension = filename.split('.').pop()?.toLowerCase();
-  
-  const languageMap = {
-    js: 'javascript',
-    jsx: 'javascript',
-    ts: 'typescript',
-    tsx: 'typescript',
-    py: 'python',
-    java: 'java',
-    cs: 'csharp',
-    css: 'css',
-    json: 'js',
-    md: 'markdown',
-    yaml: 'yaml',
-    yml: 'yaml',
-    sh: 'bash',
-    bash: 'bash',
-    sql: 'sql',
-    php: 'php',
-    html: 'markup',
-    htm: 'markup',
-    mjs: 'js',
-
-  };
-
-  return languageMap[extension] || 'jsx';
-};
-
-// Add this helper function near the top with other utility functions
-const truncateFileName = (fileName, maxLength = 20) => {
-  if (fileName.length <= maxLength) return fileName;
-  const extension = fileName.split('.').pop();
-  const nameWithoutExt = fileName.slice(0, -(extension.length + 1));
-  const truncatedName = nameWithoutExt.slice(0, maxLength - 3 - extension.length);
-  return `${truncatedName}...${extension}`;
-};
-
-// Add this new component for sortable tabs
-function SortableTab({ id, name, panelId, onClose, onClick, fileDir, panelGroups }) {
-  const panel = panelGroups.find(p => p.id === panelId);
-  const active = panel?.activeTab === id;
-  
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ 
-    id,
-    data: {
-      type: 'tab',
-      panelId,
-      path: fileDir
-    }
-  });
-
-  const [mouseDownTime, setMouseDownTime] = useState(0);
-  
-  const handleMouseDown = () => {
-    setMouseDownTime(Date.now());
-  };
-
-  const handleMouseUp = (e) => {
-    // If the mouse was down for less than 200ms, consider it a click
-    if (Date.now() - mouseDownTime < 200) {
-      onClick(e);
-    }
-  };
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    position: isDragging ? 'relative' : undefined,
-    zIndex: isDragging ? 1000 : undefined,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`flex items-center ml-1 my-0.5 rounded-md bg-[#88888820] backdrop-blur-md border border-[#88888820] cursor-pointer hover:bg-[#88888830] hover:border-[#88888830] hover:scale-105 active:scale-100 active:bg-[#88888840] active:border-[#88888840] active:z-10 group transition-[transform,border,background] hover:transition-[transform,border,background] active:transition-[border,background] duration-150 ease-in-out ${
-        active ? 'bg-[#88888840!important] border-[#88888840!important]' : ''
-      }`}
-    >
-      <div 
-        {...attributes} 
-        {...listeners} 
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        className="flex items-center pl-4 py-[0.50rem]"
-      >
-        <span className="truncate text-sm max-w-[150px]">{name}</span>
-      </div>
-      <button
-        className={`mx-1 p-1 hover:bg-accent-foreground/10 rounded opacity-0 transition-all duration-150 ease-in-out group-hover:opacity-100 ${active ? 'opacity-100' : 'opacity-0'}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose(e);
-        }}
-      >
-        <IoClose size={14} />
-      </button>
-    </div>
-  );
-}
-
-// Add this new component for the editor
-function CodeEditorTab({ code, setCode, currentPath, isActive }) {
-  return (
-    <div 
-      className="flex"
-    >
-      <div className="line-numbers text-muted-foreground select-none px-4 min-w-[64px] text-right flex-shrink-0 bg-[#333]">
-        {code.split('\n').map((_, i) => (
-          <div key={i + 1} className="editor-line-number text-accent-foreground bg-background">
-            {i + 1}
-          </div>
-        ))}
-      </div>
-      <div id="view">
-        <Editor
-          value={code}
-          onValueChange={(newCode) => {
-            setCode(newCode);
-          }}
-          highlight={code => {
-            try {
-              const language = getLanguageFromFileName(currentPath);
-              if (!Prism.languages[language]) {
-                console.warn(`Language '${language}' not found, falling back to 'plaintext'`);
-                return code;
-              }
-              return Prism.highlight(code, Prism.languages[language], language);
-            } catch (error) {
-              console.error('Highlighting error:', error);
-              return code;
-            }
-          }}
-          padding={10}
-          style={{
-            fontFamily: '"Fira code", "Fira Mono", monospace',
-            fontSize: 14,
-            backgroundColor: 'var(--background)',
-            borderRadius: '4px',
-            minWidth: '100%',
-            whiteSpace: 'pre',
-          }}
-          className="editor-wrapper whitespace-pre"
-          textareaClassName="editor-textarea whitespace-pre"
-          preClassName="editor-pre whitespace-pre"
-        />
-      </div>
-    </div>
-  );
-}
-
-// Add this new component for the drag overlay
-function DragOverlayTab({ name }) {
-  return (
-    <div className="flex items-center ml-1 my-1 rounded-md bg-[#88888840] border border-[#88888840] px-4 py-2 shadow-lg backdrop-blur-sm cursor-pointer opacity-95 pointer-events-none">
-      <span className="truncate text-sm max-w-[150px]">{name}</span>
-    </div>
-  );
-}
-
-// Update the panel component to include a droppable area
 function EditorPanel({ panel, children }) {
-  const { setNodeRef } = useDroppable({
+  const { setNodeRef, isOver } = useDroppable({
     id: `panel-${panel.id}`,
+    data: {
+      panelId: panel.id
+    }
   });
 
   return (
     <div 
       ref={setNodeRef}
-      className="flex flex-col relative h-full"
+      className={`flex flex-col relative h-full ${
+        isOver ? 'bg-accent/20' : ''
+      }`}
       style={{ 
         position: 'relative',
-        minHeight: '100%'
+        minHeight: '100%',
+        transition: 'background-color 0.15s ease-in-out'
       }}
     >
       {children}
-    </div>
-  );
-}
-
-// Add this new component for empty tabs
-function EmptyTab({ files, folderContents, loadingFolders, handleFileClick, owner, repo, fetchDirectory }) {
-  const [expandFile, setExpandFile] = useState(false);
-
-  // Reuse the renderFileTree function logic but with some modifications for the empty tab view
-  const renderEmptyTabFileTree = (items, currentPath = '') => {
-    return items.map((item) => {
-      const itemPath = currentPath ? `${currentPath}/${item.name}` : item.name;
-      
-      if (item.type === 'dir') {
-        return (
-          <AccordionItem key={itemPath} value={itemPath} className="border-b-0">
-            <AccordionTrigger 
-              className="py-2 px-4 rounded-md border-b-0 hover:bg-accent hover:text-accent-foreground relative w-full text-sm"
-              onClick={() => {
-                if (!folderContents[itemPath] && !loadingFolders[itemPath]) {
-                  fetchDirectory(itemPath);
-                }
-              }}
-            >
-              <div className="inline-flex items-center gap-2 w-full pr-6">
-                <Folder size={14} className="flex-shrink-0"/>
-                <span className="truncate min-w-0">{item.name}</span>
-                {loadingFolders[itemPath] && (
-                  <Loader2 className="w-3 h-3 animate-spin absolute right-2 top-1/2 -translate-y-1/2"/>
-                )}
-              </div>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="ml-4 pl-1 border-l-[1px]">
-                {folderContents[itemPath] && (
-                  <div className="space-y-1">
-                    {renderEmptyTabFileTree(folderContents[itemPath], itemPath)}
-                  </div>
-                )}
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        );
-      }
-      
-      return (
-        <Button
-          key={itemPath}
-          variant="ghost"
-          className="w-full justify-start gap-2 py-1.5 px-4 text-sm h-auto"
-          onClick={() => handleFileClick(item)}
-        >
-          <FileText size={14}/>
-          {truncateFileName(item.name)}
-        </Button>
-      );
-    });
-  };
-
-  return (
-    <div className="flex flex-col items-center justify-start h-full text-muted-foreground p-4">
-      <div className="text-lg font-semibold mb-4">New Tab</div>
-
-      <div className="w-full max-w-md">
-        <Button 
-          variant="outline" 
-          className={`w-full gap-2 transition-all mb-4 ${expandFile ? 'invisible scale-75 opacity-0 h-0 mb-0' : ''}`}
-          onClick={() => setExpandFile(true)}
-        >
-          <MdOutlineUploadFile size={16} />
-          Open File
-        </Button>
-
-        <div className={`transition-all duration-200 origin-top ${expandFile ? 'opacity-100 scale-100' : 'opacity-0 scale-0 invisible'}`}>
-          <div className="flex flex-col bg-background/50 backdrop-blur-sm border rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div className="text-lg font-semibold">Open a File</div>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8 mb-1"
-                onClick={() => setExpandFile(false)}
-              >
-                <XIcon size={16} />
-              </Button>
-            </div>
-            <Separator className="mt-2 mb-4" />
-            <Accordion type="multiple" className="w-full">
-              {renderEmptyTabFileTree(files)}
-            </Accordion>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -478,11 +187,17 @@ export default function CodeEditor({ params }) {
         return;
       }
 
-      // Set loading state for active panel
-      setPanelGroups(prev => prev.map(panel => ({
-        ...panel,
-        fileLoading: panel.id === activePanelId ? true : panel.fileLoading
-      })));
+      // Find and remove any empty tabs in the active panel before adding the new tab
+      setPanelGroups(prev => prev.map(panel => {
+        if (panel.id === activePanelId) {
+          return {
+            ...panel,
+            tabs: panel.tabs.filter(tab => tab.type !== 'empty'),
+            fileLoading: true
+          };
+        }
+        return panel;
+      }));
 
       setError(null);
       
@@ -713,63 +428,96 @@ export default function CodeEditor({ params }) {
     setActiveId(event.active.id);
   };
 
+  const handleDragCancel = () => {
+  };
+
   const handleDragEnd = (event) => {
-    if (!activeId || !hoveringPanelId) return;
+    
+    const { active, over } = event;
+    if (!active || !over) return;
 
-    // Only proceed if hovering over a different panel
-    if (hoveringPanelId !== `panel-${activePanelId}`) {
-      setPanelGroups(prev => {
-        // Find the source panel that contains the dragged tab
-        const sourcePanel = prev.find(p => p.tabs.some(t => t.path === activeId));
-        if (!sourcePanel) return prev;
+    const activeData = active.data.current;
+    
+    // Extract panel ID from the over.id if it's a panel drop target
+    const overPanelId = over.id.startsWith('panel-') 
+      ? parseInt(over.id.split('-')[1])
+      : over.data.current?.panelId;
 
-        // Get the dragged tab
-        const draggedTab = sourcePanel.tabs.find(t => t.path === activeId);
-        if (!draggedTab) return prev;
-        
-        // Get target panel ID from hovering panel ID
-        const targetPanelId = parseInt(hoveringPanelId.split('-')[1]);
-        if (!targetPanelId) return prev;
-        
+    // If no valid target panel, return
+    if (!overPanelId) return;
+
+    const activePanelId = activeData.panelId;
+
+    setPanelGroups(prev => {
+      // Find the source panel and tab
+      const sourcePanel = prev.find(p => p.id === activePanelId);
+      const draggedTab = sourcePanel?.tabs.find(t => t.path === active.id);
+      
+      if (!draggedTab) return prev;
+
+      // If moving within the same panel
+      if (activePanelId === overPanelId) {
         return prev.map(panel => {
-          // Remove tab from source panel
-          if (panel.id === sourcePanel.id) {
-            const tabIndex = panel.tabs.findIndex(t => t.path === activeId);
-            const remainingTabs = panel.tabs.filter(t => t.path !== activeId);
+          if (panel.id === activePanelId) {
+            const oldIndex = panel.tabs.findIndex(t => t.path === active.id);
+            const newIndex = over.data.current?.index ?? panel.tabs.length;
             
-            // Determine new active tab for source panel
-            let newActiveTab = panel.activeTab;
-            if (panel.activeTab === activeId && remainingTabs.length > 0) {
-              // Try to select the previous tab, or the next one if there is no previous
-              const newIndex = Math.max(0, Math.min(tabIndex - 1, remainingTabs.length - 1));
-              newActiveTab = remainingTabs[newIndex]?.path || null;
-            } else if (panel.activeTab === activeId) {
-              newActiveTab = null;
-            }
-
+            const newTabs = [...panel.tabs];
+            newTabs.splice(oldIndex, 1);
+            newTabs.splice(newIndex, 0, draggedTab);
+            
             return {
               ...panel,
-              tabs: remainingTabs,
-              activeTab: newActiveTab
+              tabs: newTabs,
+              activeTab: draggedTab.path
             };
           }
-          
-          // Add tab to target panel
-          if (panel.id === targetPanelId) {
-            return {
-              ...panel,
-              tabs: [...panel.tabs, draggedTab],
-              activeTab: activeId
-            };
-          }
-          
           return panel;
         });
+      }
+
+      // Moving between panels
+      return prev.map(panel => {
+        if (panel.id === activePanelId) {
+          const remainingTabs = panel.tabs.filter(t => t.path !== active.id);
+          return {
+            ...panel,
+            tabs: remainingTabs,
+            activeTab: remainingTabs.length > 0 ? remainingTabs[0].path : null,
+            currentContent: remainingTabs.length > 0 ? 
+              (remainingTabs[0].type === 'image' ? { type: 'image', url: remainingTabs[0].content.url } : { type: 'code' }) 
+              : { type: 'code' }
+          };
+        }
+
+        if (panel.id === overPanelId) {
+          const insertIndex = over.data.current?.type === 'tab' ? over.data.current.index : panel.tabs.length;
+          const newTabs = [...panel.tabs];
+          newTabs.splice(insertIndex, 0, draggedTab);
+
+          return {
+            ...panel,
+            tabs: newTabs,
+            activeTab: draggedTab.path,
+            currentContent: draggedTab.type === 'image' ? 
+              { type: 'image', url: draggedTab.content.url } : 
+              { type: 'code' }
+          };
+        }
+
+        return panel;
       });
+    });
+
+    // Update code state if necessary
+    const draggedTab = panelGroups
+      .find(p => p.id === activePanelId)
+      ?.tabs.find(t => t.path === active.id);
+
+    if (draggedTab?.type === 'code') {
+      setCode(draggedTab.content);
     }
-    
-    setActiveId(null);
-    setHoveringPanelId(null);
+    setCurrentPath(draggedTab?.path || '');
   };
 
   // Update handleNewTab to ensure unique IDs and proper content type
@@ -805,6 +553,44 @@ export default function CodeEditor({ params }) {
     }));
   };
 
+  const handleOpenUtilityTabs = (tabType) => {
+    // Generate unique ID for the tab
+    const tabId = `${tabType}-${Date.now()}`;
+    
+    setPanelGroups(prev => prev.map(panel => {
+        if (panel.id === activePanelId) {
+            // Remove any empty tabs first
+            const filteredTabs = panel.tabs.filter(t => t.type !== 'empty');
+            
+            // Check if this type of utility tab already exists
+            const existingTab = filteredTabs.find(t => t.type === tabType);
+            if (existingTab) {
+                // If it exists, just activate it
+                return {
+                    ...panel,
+                    tabs: filteredTabs,  // Remove empty tabs
+                    activeTab: existingTab.path,
+                    currentContent: { type: tabType }
+                };
+            }
+            
+            // Otherwise create a new tab
+            return {
+                ...panel,
+                tabs: [...filteredTabs, {  // Use filtered tabs without empty ones
+                    path: tabId,
+                    name: tabType.charAt(0).toUpperCase() + tabType.slice(1),
+                    type: tabType,
+                    content: null
+                }],
+                activeTab: tabId,
+                currentContent: { type: tabType }
+            };
+        }
+        return panel;
+    }));
+  };
+
   return (
     <SidebarProvider className="h-screen flex">
         <ResizablePanelGroup 
@@ -818,7 +604,7 @@ export default function CodeEditor({ params }) {
                 maxSize={82}
                 collapsible={true}
             >
-                <Sidebar className="h-full w-full border-r" collapsible="none">
+                <Sidebar className="h-full w-full bg-background" collapsible="none">
                     <TooltipProvider delayDuration={100} skipDelayDuration={100}>
                         <SidebarContent className="h-full">
                             <SidebarGroup className="h-full">
@@ -872,14 +658,18 @@ export default function CodeEditor({ params }) {
                       </Tooltip>
                       <Tooltip>
                           <TooltipTrigger asChild>
-                              <div className="hover:bg-accent font-semibold rounded-md p-1 px-4 text-sm cursor-pointer flex items-center max-h-6">
-                                  Help
+                              <div 
+                                onClick={() => handleOpenUtilityTabs('settings')}
+                                className="hover:bg-accent rounded-md p-1 px-4 flex items-center max-h-6 cursor-pointer"
+                              >
+                                  <Settings size={16} className="mr-2"/>
+                                  <span className="text-sm">Settings</span>
                               </div>
                           </TooltipTrigger>
-                          <TooltipContent>Help <span className="text-[10px] text-muted-foreground">⌘K</span></TooltipContent>
+                          <TooltipContent>Settings <span className="text-[10px] text-muted-foreground">⌘,</span></TooltipContent>
                       </Tooltip>
                   </TooltipProvider>
-                  {currentPath} {hoveringPanelId} {activeId}
+                  {currentPath} {hoveringPanelId} {activeId} {activePanelId}
               </div>
               {/* Editor panels */}
         <ResizablePanelGroup 
@@ -891,9 +681,87 @@ export default function CodeEditor({ params }) {
                     <ResizablePanel 
                       className={`flex flex-col relative`}
                       id={`panel-${panel.id}`}
-                      onMouseEnter={() => setHoveringPanelId(`panel-${panel.id}`)}
+                      onMouseEnter={() => {
+                        console.log('Setting hovering panel:', `panel-${panel.id}`);
+                        setHoveringPanelId(`panel-${panel.id}`);
+                      }}
                       onMouseLeave={() => setHoveringPanelId(null)}
-                      onMouseDown={() => setActivePanelId(panel.id)}
+                      onMouseDown={() => {
+                        console.log('Setting active panel:', panel.id);
+                        setActivePanelId(panel.id);
+                      }}
+                      onMouseUp={() => {
+                        console.log('Mouse up event');
+                        console.log('Active panel ID:', activePanelId);
+                        console.log('Hovering panel ID:', hoveringPanelId);
+                        console.log('Active ID:', activeId);
+                        console.log(parseInt(hoveringPanelId.split('-')[1]))
+                        if (activePanelId !== parseInt(hoveringPanelId.split('-')[1]) && activeId != null) {
+                          console.log('Moving tab:', {
+                            activeId,
+                            fromPanel: activePanelId,
+                            toPanel: parseInt(hoveringPanelId.split('-')[1]),
+                            hoveringPanelId
+                          });
+                          
+                          setPanelGroups(prev => {
+                            // Find the source panel that contains the active tab
+                            const sourcePanel = prev.find(p => p.tabs.some(t => t.path === activeId));
+                            if (!sourcePanel) {
+                              console.log('Source panel not found');
+                              return prev;
+                            }
+
+                            // Find the tab that's being moved
+                            const tabToMove = sourcePanel.tabs.find(t => t.path === activeId);
+                            if (!tabToMove) {
+                              console.log('Tab to move not found');
+                              return prev;
+                            }
+
+                            console.log('Moving tab:', tabToMove);
+
+                            return prev.map(panel => {
+                              // Remove tab from source panel
+                              if (panel.id === sourcePanel.id) {
+                                const remainingTabs = panel.tabs.filter(t => t.path !== activeId);
+                                return {
+                                  ...panel,
+                                  tabs: remainingTabs,
+                                  activeTab: remainingTabs.length > 0 ? remainingTabs[0].path : null,
+                                  currentContent: remainingTabs.length > 0 ? 
+                                    (remainingTabs[0].type === 'image' ? { type: 'image', url: remainingTabs[0].content.url } : { type: remainingTabs[0].type || 'code' }) 
+                                    : { type: 'code' }
+                                };
+                              }
+
+                              // Add tab to target panel
+                              if (panel.id === parseInt(hoveringPanelId.split('-')[1])) {
+                                return {
+                                  ...panel,
+                                  tabs: [...panel.tabs, tabToMove],
+                                  activeTab: tabToMove.path,
+                                  currentContent: tabToMove.type === 'image' ? 
+                                    { type: 'image', url: tabToMove.content.url } : 
+                                    { type: tabToMove.type || 'code' }
+                                };
+                              }
+
+                              return panel;
+                            });
+                          });
+
+                          // Update code state if necessary
+                          const movedTab = panelGroups
+                            .find(p => p.tabs.some(t => t.path === activeId))
+                            ?.tabs.find(t => t.path === activeId);
+
+                          if (movedTab?.type === 'code') {
+                            setCode(movedTab.content);
+                          }
+                          setCurrentPath(movedTab?.path || '');
+                        }
+                      }}
                       minSize={24}
                     >
                       <EditorPanel panel={panel}>
@@ -902,6 +770,7 @@ export default function CodeEditor({ params }) {
                           sensors={sensors}
                           onDragStart={handleDragStart}
                           onDragEnd={handleDragEnd}
+                          onDragCancel={handleDragCancel}
                           modifiers={[restrictToWindowEdges]}
                         >
                           <div
@@ -911,30 +780,31 @@ export default function CodeEditor({ params }) {
                               items={panel.tabs.map(tab => tab.path)}
                               strategy={horizontalListSortingStrategy}
                             >
-                              {panel.tabs.map(tab => (
-                                <SortableTab
-                                  key={tab.path}
-                                  id={tab.path}
-                                  name={truncateFileName(tab.name)}
-                                  panelId={panel.id}
-                                  panelGroups={panelGroups}
-                                  onClick={() => {
-                                    setPanelGroups(prev => prev.map(p => ({
-                                      ...p,
-                                      activeTab: p.id === panel.id ? tab.path : p.activeTab,
-                                      currentContent: p.id === panel.id ? 
-                                        (tab.type === 'image' ? { type: 'image', url: tab.content.url } : { type: 'code' }) 
-                                        : p.currentContent
-                                    })));
-                                    if (tab.type === 'code') {
-                                      setCode(tab.content);
-                                    }
-                                    setCurrentPath(tab.path);
-                                  }}
-                                  onClose={(e) => handleCloseTab(tab.path, e)}
-                                  fileDir={tab.path}
-                                />
-                              ))}
+                              <div className="flex items-center">
+                                {panel.tabs.map((tab, index) => (
+                                  <SortableTab
+                                    key={tab.path}
+                                    id={tab.path}
+                                    name={truncateFileName(tab.name)}
+                                    panelId={panel.id}
+                                    panelGroups={panelGroups}
+                                    index={index}
+                                    onClick={() => {
+                                      setPanelGroups(prev => prev.map(p => ({
+                                        ...p,
+                                        activeTab: p.id === panel.id ? tab.path : p.activeTab,
+                                        currentContent: p.id === panel.id ? { type: tab.type } : p.currentContent
+                                      })));
+                                      if (tab.type === 'code') {
+                                        setCode(tab.content);
+                                      }
+                                      setCurrentPath(tab.path);
+                                    }}
+                                    onClose={(e) => handleCloseTab(tab.path, e)}
+                                    fileDir={tab.path}
+                                  />
+                                ))}
+                              </div>
                             </SortableContext>
                             <div 
                               className="flex p-1 items-center mx-4 my-1 rounded-md bg-[#88888820] backdrop-blur-md border border-[#88888820] cursor-pointer hover:bg-[#88888830] hover:border-[#88888830] hover:scale-105 active:scale-100 active:bg-[#88888840] active:border-[#88888840] active:z-10 group transition-[transform,border,background] hover:transition-[transform,border,background] active:transition-[border,background] duration-150 ease-in-out"
@@ -947,71 +817,113 @@ export default function CodeEditor({ params }) {
                             dropAnimation={{
                               duration: 150,
                               easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
-                            }} 
+                            }}
+                            
                             className="opacity-95 pointer-events-none"
                           >
                             {activeId ? <DragOverlayTab name={truncateFileName(activeId)} /> : null}
                           </DragOverlay>
                         </DndContext>
                         {/* Editor content */}
-                        <div className={`h-[calc(100dvh-1rem)] editor-content transition-all duration-250 overflow-x-scroll overflow-y-scroll py-2 pr-2 m-2 ${
+                        <div className={`h-[calc(100vh-8rem)] editor-content transition-all duration-250 py-2 pr-2 m-2 ${
                           hoveringPanelId === `panel-${panel.id}` && activeId && activePanelId !== panel.id ? 
                           'opacity-65 bg-[#187cff54]' : ''
                         }`}>
-                            {(() => {
-                              if (panel.fileLoading) {
-                                return (
-                                  <div className="flex justify-center py-4">
-                                    <Loader2 className="w-6 h-6 animate-spin"/>
-                                  </div>
-                                );
-                              }
-
-                              if (panel.currentContent.type === 'image') {
-                                return (
-                                  <div className="flex justify-center items-center h-full">
+                          {panel.fileLoading ? (
+                            <div className="flex justify-center py-4">
+                              <Loader2 className="w-6 h-6 animate-spin"/>
+                            </div>
+                          ) : (
+                            <div className="relative w-full h-full">
+                              {/* Render all image tabs */}
+                              {panel.tabs.map(tab => (
+                                tab.type === 'image' && (
+                                  <div 
+                                    key={tab.path}
+                                    className="flex justify-center items-center h-full absolute top-0 w-full transition-transform duration-200 ease-in-out"
+                                    style={{ 
+                                      transform: `translateX(${panel.activeTab === tab.path ? '0%' : '100%'})`,
+                                      pointerEvents: panel.activeTab === tab.path ? 'auto' : 'none'
+                                    }}
+                                  >
                                     <img 
-                                      src={panel.currentContent.url} 
-                                      alt={currentPath}
+                                      src={tab.content.url} 
+                                      alt={tab.path}
                                       className="max-w-full h-auto object-contain"
                                       style={{ maxHeight: 'calc(100vh - 8rem)' }}
                                     />
                                   </div>
-                                );
-                              } else if (panel.currentContent.type === 'empty') {
-                                return <EmptyTab 
-                                  files={files}
-                                  folderContents={folderContents}
-                                  loadingFolders={loadingFolders}
-                                  handleFileClick={handleFileClick}
-                                  owner={owner}
-                                  repo={repo}
-                                  fetchDirectory={fetchDirectory}
-                                />;
-                              } else {
-                                return panel.tabs
-                                  .filter(tab => tab.path === panel.activeTab && tab.type === 'code')
-                                  .map(tab => (
-                                    <CodeEditorTab
-                                      key={tab.path}
-                                      code={tab.content}
-                                      setCode={(newCode) => {
-                                        setPanelGroups(prev => prev.map(p => ({
-                                          ...p,
-                                          tabs: p.tabs.map(t => 
-                                            t.path === tab.path ? { ...t, content: newCode } : t
-                                          )
-                                        })));
-                                        if (tab.path === panel.activeTab) {
-                                          setCode(newCode);
-                                        }
-                                      }}
-                                      currentPath={tab.path}
-                                      isActive={true}
-                                    />
-                                  ));
-                              }
-                            })()}
+                                )
+                              ))}
+
+                              {/* Render all code tabs */}
+                              {panel.tabs.map(tab => (
+                                tab.type === 'code' && (
+                                  <div 
+                                    key={tab.path}
+                                    className="absolute top-0 w-full h-full transition-transform duration-200 ease-in-out"
+                                    style={{ 
+                                      transform: `translateX(${panel.activeTab === tab.path ? '0%' : '100%'})`,
+                                      pointerEvents: panel.activeTab === tab.path ? 'auto' : 'none',
+                                      overflow: panel.activeTab === tab.path ? 'auto' : 'hidden'
+                                    }}
+                                  >
+                                    <div className={`w-full h-full ${panel.activeTab === tab.path ? 'overflow-auto' : 'overflow-hidden'}`}>
+                                      <CodeEditorTab
+                                        code={tab.content}
+                                        setCode={(newCode) => {
+                                          setPanelGroups(prev => prev.map(p => ({
+                                            ...p,
+                                            tabs: p.tabs.map(t => 
+                                              t.path === tab.path ? { ...t, content: newCode } : t
+                                            )
+                                          })));
+                                          if (tab.path === panel.activeTab) {
+                                            setCode(newCode);
+                                          }
+                                        }}
+                                        currentPath={tab.path}
+                                        isActive={panel.activeTab === tab.path}
+                                      />
+                                    </div>
+                                  </div>
+                                )
+                              ))}
+
+                              {/* Render empty tab */}
+                              {panel.currentContent.type === 'empty' && (
+                                <div 
+                                  className="absolute top-0 w-full transition-transform duration-200 ease-in-out"
+                                  style={{ 
+                                    transform: `translateX(${panel.tabs.some(t => t.type === 'empty') ? '0%' : '100%'})`,
+                                    pointerEvents: panel.tabs.some(t => t.type === 'empty') ? 'auto' : 'none'
+                                  }}
+                                >
+                                  <EmptyTab 
+                                    files={files}
+                                    folderContents={folderContents}
+                                    loadingFolders={loadingFolders}
+                                    handleFileClick={handleFileClick}
+                                    owner={owner}
+                                    repo={repo}
+                                    fetchDirectory={fetchDirectory}
+                                    handleOpenUtilityTabs={handleOpenUtilityTabs}
+                                  />
+                                </div>
+                              )}
+                              {panel.currentContent.type === 'settings' && (
+                                <div 
+                                  className="absolute top-0 w-full transition-transform duration-200 ease-in-out overflow-auto"
+                                  style={{ 
+                                    transform: `translateX(${panel.tabs.some(t => t.type === 'settings') ? '0%' : '100%'})`,
+                                    pointerEvents: panel.tabs.some(t => t.type === 'settings') ? 'auto' : 'none'
+                                  }}
+                                >
+                                  <SettingsPage />
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </EditorPanel>
                     </ResizablePanel>
@@ -1019,9 +931,9 @@ export default function CodeEditor({ params }) {
                 </React.Fragment>
                 ))}
 
-                <EditorShortcuts />
+                <EditorShortcuts handleOpenUtilityTabs={handleOpenUtilityTabs} />
                 <div 
-                    className='absolute bottom-2 left-2 cursor-pointer hover:bg-accent rounded-md p-1'
+                    className='fixed bottom-2 left-2 cursor-pointer hover:bg-accent rounded-md p-1 z-[9999]'
                         onClick={toggleSidebar}
                     >
                         <TooltipProvider delayDuration={100} skipDelayDuration={100}>
@@ -1035,7 +947,6 @@ export default function CodeEditor({ params }) {
                 </div>
               </ResizablePanelGroup>
             </ResizablePanel>
-
             
         </ResizablePanelGroup>
     </SidebarProvider>

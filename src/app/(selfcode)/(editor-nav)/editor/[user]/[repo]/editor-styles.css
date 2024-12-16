@@ -9,6 +9,7 @@
   left: 0;
   z-index: 10;
   background-color: hsl(var(--background));
+  box-shadow: 0 0 0 0px ;
 }
 
 .editor-line-number {
