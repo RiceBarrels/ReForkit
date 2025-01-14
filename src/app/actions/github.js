@@ -12,11 +12,9 @@ const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
 export async function fetchGitHubRepos() {
   try {
     const session = await auth();
-    console.log('Full auth session:', session);
     
     const { userId } = session;
     if (!userId) {
-      console.log('Auth headers:', JSON.stringify(session.headers, null, 2));
       return {
         connected: false,
         repos: [],
@@ -25,8 +23,6 @@ export async function fetchGitHubRepos() {
     }
 
     const tokens = await getGitHubTokens(userId);
-    console.log('GitHub tokens:', tokens);
-    console.log('GitHub tokens scopes:', tokens.data[0].scopes);
     if (!tokens?.data || !Array.isArray(tokens.data) || tokens.data.length === 0) {
       return {
         connected: false,
@@ -36,7 +32,6 @@ export async function fetchGitHubRepos() {
     }
 
     const githubToken = tokens.data[0]?.token;
-    console.log('GitHub Token:', githubToken);
     
     if (!githubToken) {
       return {

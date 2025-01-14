@@ -429,9 +429,11 @@ export default function CodeEditor({ params }) {
   };
 
   const handleDragCancel = () => {
+    setTimeout(()=>setActiveId(null),0);
   };
 
   const handleDragEnd = (event) => {
+    setTimeout(()=>setActiveId(null),0);
     
     const { active, over } = event;
     if (!active || !over) return;
@@ -782,6 +784,7 @@ export default function CodeEditor({ params }) {
                             >
                               <div className="flex items-center">
                                 {panel.tabs.map((tab, index) => (
+                                  
                                   <SortableTab
                                     key={tab.path}
                                     id={tab.path}
@@ -789,6 +792,7 @@ export default function CodeEditor({ params }) {
                                     panelId={panel.id}
                                     panelGroups={panelGroups}
                                     index={index}
+                                    className={hoveringPanelId !== `panel-${panel.id}` && hoveringPanelId && activeId === tab.path ? 'scale-[0!important] w-0' : '' + " transition-all scale-100"}
                                     onClick={() => {
                                       setPanelGroups(prev => prev.map(p => ({
                                         ...p,

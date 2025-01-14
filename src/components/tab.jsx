@@ -13,7 +13,7 @@ import Prism from 'prismjs';
 import { MdOutlineUploadFile } from "react-icons/md";
 
 // Add this new component for sortable tabs
-export function SortableTab({ id, name, panelId, onClose, onClick, fileDir, panelGroups, index }) {
+export function SortableTab({ id, className, name, panelId, onClose, onClick, fileDir, panelGroups, index }) {
     const panel = panelGroups.find(p => p.id === panelId);
     const active = panel?.activeTab === id;
     
@@ -59,9 +59,9 @@ export function SortableTab({ id, name, panelId, onClose, onClick, fileDir, pane
       <div
         ref={setNodeRef}
         style={style}
-        className={`flex items-center ml-1 my-0.5 rounded-md bg-[#88888820] backdrop-blur-md border border-[#88888820] cursor-pointer hover:bg-[#88888830] hover:border-[#88888830] hover:scale-105 active:scale-100 active:bg-[#88888840] active:border-[#88888840] active:z-10 group transition-[transform,border,background] hover:transition-[transform,border,background] active:transition-[border,background] duration-150 ease-in-out ${
+        className={`flex items-center ml-1 my-0.5 rounded-md bg-[#88888820] backdrop-blur-md border border-[#88888820] cursor-pointer hover:bg-[#88888830] hover:border-[#88888830] hover:scale-105 active:scale-100 active:bg-[#88888840] active:border-[#88888840] active:z-10 group duration-150 ease-in-out ${
           active ? 'bg-[#88888840!important] border-[#88888840!important]' : ''
-        }`}
+        } ${className}`}
       >
         <div 
           {...attributes} 
@@ -208,9 +208,7 @@ export function DragOverlayTab({ name }) {
 
 export function CodeEditorTab({ code, setCode, currentPath, isActive }) {
   return (
-    <div 
-      className="flex"
-    >
+    <div className="flex">
       <div className="line-numbers text-muted-foreground select-none px-4 min-w-[64px] text-right flex-shrink-0 bg-[#333]">
         {code.split('\n').map((_, i) => (
           <div key={i + 1} className="editor-line-number text-accent-foreground bg-background">
@@ -221,15 +219,15 @@ export function CodeEditorTab({ code, setCode, currentPath, isActive }) {
       <div id="view">
         <Editor
           value={code}
-          onValueChange={(newCode) => {
-            setCode(newCode);
-          }}
+          onValueChange={setCode}
           highlight={code => {
             try {
               const language = getLanguageFromFileName(currentPath);
+              console.log(language);
+              console.log(Prism.languages);
               if (!Prism.languages[language]) {
-                console.warn(`Language '${language}' not found, falling back to 'plaintext'`);
-                return code;
+                console.warn(`Language '${language}' not found, using javascript`);
+                return Prism.highlight(code, Prism.languages.javascript, 'javascript');
               }
               return Prism.highlight(code, Prism.languages[language], language);
             } catch (error) {
