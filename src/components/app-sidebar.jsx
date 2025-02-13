@@ -4,7 +4,7 @@ import { Home, Search, Settings, FileText,LogOut, Moon, Sun } from "lucide-react
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -48,6 +48,7 @@ export function AppSidebar() {
   const { signOut } = useClerk();
   const { theme, setTheme } = useTheme();
   const { user } = useUser();
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -64,6 +65,10 @@ export function AppSidebar() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    setMounted(true);
   }, []);
 
   const sidebarVariants = {
@@ -84,6 +89,8 @@ export function AppSidebar() {
     await signOut();
     router.push("/");
   };
+
+  const ThemeIcon = mounted ? (theme === 'dark' ? Moon : Sun) : null;
 
   return (
     <Sidebar className="h-full">
@@ -224,15 +231,26 @@ export function AppSidebar() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <SidebarMenuButton 
-                          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                           className="p-2" 
                           asChild
                         >
                           <motion.div
                             whileHover={{ scale: 1.1 }}
                             transition={{ duration: 0.2 }}
+                            data-sidebar="menu-button"
+                            data-size="default"
+                            data-active={false}
                           >
-                            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                            {mounted ? (
+                              theme === 'dark' ? (
+                                <Moon className="w-4 h-4" />
+                              ) : (
+                                <Sun className="w-4 h-4" />
+                              )
+                            ) : (
+                              <div className="w-4 h-4" />
+                            )}
                           </motion.div>
                         </SidebarMenuButton>
                       </TooltipTrigger>

@@ -8,7 +8,7 @@ import { SortableTab, EmptyTab, DragOverlayTab, CodeEditorTab } from '@/componen
 import EditorShortcuts from './editor-shortcuts';
 import { SidebarProvider } from "@/components/ui/sidebar";
 import Link from "next/link";
-import { Home, Loader2, Plus, X, Folder, Settings} from "lucide-react";
+import { Home, Loader2, Plus, X, Folder, Settings, Play} from "lucide-react";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { PiRectangle, PiSidebarFill } from "react-icons/pi";
 import {
@@ -33,7 +33,7 @@ import {
   SidebarGroupLabel,
   SidebarMenu
 } from "@/components/ui/sidebar";
-import { fetchGitHubFile } from '@/app/actions/github';
+import { getGitHubContents, getDefaultBranch } from '@/app/actions/github';
 import { DndContext, DragOverlay} from "@dnd-kit/core";
 import {
   useSensor,
@@ -84,6 +84,7 @@ export default function CodeEditor({ params }) {
   const { isSignedIn } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [folderContents, setFolderContents] = useState({});
+  const [branch, setBranch] = useState('');
 
   // Add a new state to track loading state for each folder
   const [loadingFolders, setLoadingFolders] = useState({});
@@ -107,6 +108,10 @@ export default function CodeEditor({ params }) {
   // Fetch directory contents
   const fetchDirectory = async (path = '') => {
     try {
+      if (!branch) {
+        throw new Error('No branch selected');
+      }
+
       if (path === '') {
         setSidebarLoading(true);
       } else {
@@ -114,18 +119,15 @@ export default function CodeEditor({ params }) {
       }
       setError(null);
       
-      const result = await fetchGitHubFile(owner, repo, path);
+      const result = await getGitHubContents(owner, repo, path, branch, true);
       
       if (!result.success) {
         throw new Error(result.message || 'Failed to fetch directory contents');
       }
 
-      // Sort files and directories
       const sortedContent = result.content.sort((a, b) => {
-        // Directories first
         if (a.type === 'dir' && b.type !== 'dir') return -1;
         if (a.type !== 'dir' && b.type === 'dir') return 1;
-        // Then alphabetically
         return a.name.localeCompare(b.name);
       });
 
@@ -156,7 +158,6 @@ export default function CodeEditor({ params }) {
       let existingPanel;
       let existingTab;
       
-      // Update the tab existence check to use the full file path
       panelGroups.forEach(panel => {
         const tab = panel.tabs.find(tab => tab.path === file.path);
         if (tab) {
@@ -166,10 +167,8 @@ export default function CodeEditor({ params }) {
       });
 
       if (existingTab) {
-        // Update the panel groups to activate the existing tab
         setPanelGroups(prev => prev.map(panel => {
           if (panel.id === existingPanel.id) {
-            // If it's a code tab, make sure to set the code state
             if (existingTab.type === 'code') {
               setCode(existingTab.content);
             }
@@ -187,7 +186,6 @@ export default function CodeEditor({ params }) {
         return;
       }
 
-      // Find and remove any empty tabs in the active panel before adding the new tab
       setPanelGroups(prev => prev.map(panel => {
         if (panel.id === activePanelId) {
           return {
@@ -223,19 +221,30 @@ export default function CodeEditor({ params }) {
           return panel;
         }));
       } else {
-        const result = await fetchGitHubFile(owner, repo, file.path);
+        const result = await getGitHubContents(owner, repo, file.path, branch, true);
         
         if (!result.success) {
           throw new Error(result.message || 'Failed to fetch file content');
+        }
+
+        // Handle the content based on the response format
+        let content = '';
+        if (typeof result.content === 'string') {
+          content = result.content;
+        } else if (result.content.content) {
+          // GitHub API returns base64 encoded content
+          content = atob(result.content.content.replace(/\s/g, ''));
+        } else {
+          throw new Error('Unexpected content format');
         }
 
         newTab = {
           path: file.path,
           name: file.name,
           type: 'code',
-          content: result.content
+          content: content
         };
-        setCode(result.content);
+        setCode(content);
         setPanelGroups(prev => prev.map(panel => {
           if (panel.id === activePanelId) {
             return {
@@ -313,10 +322,40 @@ export default function CodeEditor({ params }) {
 
   // Initial load
   useEffect(() => {
-    if (isSignedIn) {
-      fetchDirectory();
-    }
-  }, [isSignedIn, owner, repo]); // Updated dependencies to use unwrapped values
+    const initializeRepo = async () => {
+      if (isSignedIn) {
+        try {
+          // Get default branch first
+          const branchResult = await getDefaultBranch(owner, repo);
+          if (branchResult.success) {
+            setBranch(branchResult.default_branch);
+            // Only fetch directory after we have the branch
+            const result = await getGitHubContents(owner, repo, '', branchResult.default_branch, true);
+            if (!result.success) {
+              throw new Error(result.message || 'Failed to fetch directory contents');
+            }
+            
+            const sortedContent = result.content.sort((a, b) => {
+              if (a.type === 'dir' && b.type !== 'dir') return -1;
+              if (a.type !== 'dir' && b.type === 'dir') return 1;
+              return a.name.localeCompare(b.name);
+            });
+            
+            setFiles(sortedContent);
+          } else {
+            throw new Error('Failed to fetch default branch');
+          }
+        } catch (err) {
+          console.error("Repository initialization error:", err);
+          setError(err.message);
+        } finally {
+          setSidebarLoading(false);
+        }
+      }
+    };
+
+    initializeRepo();
+  }, [isSignedIn, owner, repo]);
 
   const renderFileTree = (items, currentPath = '') => {
     return items.map((item) => {
@@ -344,7 +383,7 @@ export default function CodeEditor({ params }) {
             <AccordionContent>
               <div className="ml-6 pl-1 border-l-[1px]">
                 {folderContents[itemPath] && (
-                  <div className="space-y-1">
+                  <div key={`content-${itemPath}`} className="space-y-1">
                     {renderFileTree(folderContents[itemPath], itemPath)}
                   </div>
                 )}
@@ -355,11 +394,10 @@ export default function CodeEditor({ params }) {
       }
       
       return (
-        <TooltipProvider>
+        <TooltipProvider key={itemPath}>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                key={itemPath}
                 variant="ghost"
                 className="w-full justify-start gap-2 py-2"
                 onClick={() => handleFileClick(item)}
@@ -672,6 +710,20 @@ export default function CodeEditor({ params }) {
                       </Tooltip>
                   </TooltipProvider>
                   {currentPath} {hoveringPanelId} {activeId} {activePanelId}
+                  <div className='flex-1'/>
+                  <TooltipProvider delayDuration={100} skipDelayDuration={100}>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div 
+                            className='align-center gap-x-1 justify-center hover:bg-accent px-2 py-1 rounded-md flex items-center max-h-6 cursor-pointer text-xs font-extrabold mx-3'
+                            onClick=''
+                          >
+                            <Play size={16}/> <span>Run</span>
+                          </div>
+                        </TooltipTrigger>
+                      <TooltipContent>Run <code className='text-xs border rounded-sm px-2 py-1'>index.html</code> <span className="text-[10px] text-muted-foreground">⌘R</span></TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
               </div>
               {/* Editor panels */}
         <ResizablePanelGroup 

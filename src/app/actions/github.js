@@ -89,8 +89,12 @@ export async function fetchGitHubRepos() {
   }
 }
 
-async function getGitHubTokens(userId) {
+export async function getGitHubTokens(userId=' ') {
   try {
+    if (userId === ' ') {
+      const session = await auth();
+      userId = session;
+    }
     const tokens = await clerk.users.getUserOauthAccessToken(
       userId,
       'oauth_github'
@@ -107,17 +111,9 @@ export async function GET(request, { params }) {
   const path = filepath.join('/')
   
   try {
-    // Try main branch first
     let response = await fetch(
-      `https://raw.githubusercontent.com/${username}/${project}/main/${path}`
+      `https://raw.githubusercontent.com/${username}/${project}/${getDefaultBranch(username,project)}/${path}`
     )
-
-    if (!response.ok) {
-      // If main fails, try master branch
-      response = await fetch(
-        `https://raw.githubusercontent.com/${username}/${project}/master/${path}`
-      )
-    }
 
     if (!response.ok) {
       throw new Error('Failed to fetch file')
@@ -197,82 +193,147 @@ export async function GET(request, { params }) {
   }
 }
 
-export async function fetchGitHubFile(owner, repo, path = '') {
+export async function getGitHubContents(owner, repo, path = '', branch, isAuthRequired = true) {
   try {
-    const session = await auth();
-    const { userId } = session;
-    
-    if (!userId) {
-      return {
-        success: false,
-        message: 'User not authenticated'
-      };
-    }
-
-    const tokens = await getGitHubTokens(userId);
-    
-    if (!tokens?.data || !Array.isArray(tokens.data) || tokens.data.length === 0) {
-      return {
-        success: false,
-        message: 'GitHub account not connected'
-      };
-    }
-
-    const githubToken = tokens.data[0]?.token;
-    
-    if (!githubToken) {
-      return {
-        success: false,
-        message: 'No valid GitHub token found'
-      };
-    }
-
-    // Initialize Octokit with the Clerk-provided GitHub token
-    const octokit = new Octokit({
-      auth: githubToken
-    });
-
-    // Make the API request
-    const response = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
-      owner,
-      repo,
-      path,
-      headers: {
-        'X-GitHub-Api-Version': '2022-11-28'
+    if (isAuthRequired) {
+      const session = await auth();
+      const { userId } = session;
+      if (!userId) {
+        return {
+          success: false,
+          message: 'User not authenticated'
+        };
       }
-    });
 
-    // If the response is an array, it's a directory listing
-    if (Array.isArray(response.data)) {
+      const tokens = await getGitHubTokens(userId);
+      if (!tokens?.data || !Array.isArray(tokens.data) || tokens.data.length === 0) {
+        return {
+          success: false,
+          message: 'GitHub account not connected'
+        };
+      }
+
+      const githubToken = tokens.data[0]?.token;
+      
+      if (!githubToken) {
+        return {
+          success: false,
+          message: 'No valid GitHub token found'
+        };
+      }
+
+      // Initialize Octokit with the Clerk-provided GitHub token
+      const octokit = new Octokit({
+        auth: githubToken
+      });
+
+      // Make the API request with the correct endpoint
+      const response = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}?ref={branch}', {
+        owner,
+        repo,
+        path,
+        branch,
+        headers: {
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      });
+
       return {
         success: true,
-        content: response.data.map(item => ({
-          name: item.name,
-          path: item.path,
-          type: item.type,
-          size: item.size,
-          download_url: item.download_url
-        }))
+        content: response.data
       };
-    }
+    } else {
+      const octokit = new Octokit();
 
-    // If it's not an array, it's a file's contents
-    if (response.data.content) {
-      const content = Buffer.from(response.data.content, 'base64').toString();
+      // Make the API request with the correct endpoint
+      const response = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}?ref={branch}', {
+        owner,
+        repo,
+        path,
+        branch,
+        headers: {
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      });
+
       return {
         success: true,
-        content,
-        type: 'file'
+        content: response.data
       };
     }
-
-    throw new Error('Invalid response format from GitHub API');
-
   } catch (error) {
     console.error('GitHub API Error:', error);
     return {
       success: false,
       message: error.message || 'Failed to fetch from GitHub'
+    };
+  }
+}
+
+export async function getDefaultBranch(owner, repo) {
+  try {
+    const session = await auth();
+    const { userId } = session;
+    const tokens = await getGitHubTokens(userId);
+    const githubToken = tokens.data[0]?.token;
+    const octokit = userId ? new Octokit({auth: githubToken}) : new Octokit();
+
+    // Make the API request
+    const response = await octokit.request('GET /repos/{owner}/{repo}', {
+      owner,
+      repo,
+      headers: {
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
+
+    return {
+      success: true,
+      default_branch: response.data.default_branch
+    };
+
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return {
+      success: false,
+      message: error.message || 'Failed to fetch default branch'
+    };
+  }
+}
+
+export async function getBranches(owner, repo) {
+  try {
+    const session = await auth();
+    const { userId } = session;
+    const tokens = await getGitHubTokens(userId);
+    const githubToken = tokens.data[0]?.token;
+
+    console.log('GitHub token:', githubToken);
+
+    
+    const octokit = userId ? new Octokit({auth: githubToken}) : new Octokit();
+
+    // Make the API request
+    const response = await octokit.request('GET /repos/{owner}/{repo}/branches', {
+      owner,
+      repo,
+      headers: {
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
+
+    console.log('Branches response:', response);
+
+    return {
+      success: true,
+      branches: response.data
+    };
+
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return {
+      success: false,
+      message: error.message || 'Failed to fetch branches'
     };
   }
 }

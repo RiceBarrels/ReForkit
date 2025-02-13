@@ -1,28 +1,33 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server';
+import { getGitHubTokens } from '@/app/actions/github';
+import { Octokit } from '@octokit/rest'
+
 
 export async function GET(request, { params }) {
-  const { username, project, filepath } = params
+  const { username, project, filepath, branch } = params;
   const path = filepath.join('/')
+  const session = await auth();
+  const { userId } = session;
   
   try {
-    // Try main branch first
-    let response = await fetch(
-      `https://raw.githubusercontent.com/${username}/${project}/main/${path}`
-    )
+    const tokens = await getGitHubTokens(userId);
+    const octokit = tokens ? new Octokit({ auth: tokens.accessToken }) : new Octokit()
 
-    if (!response.ok) {
-      // If main fails, try master branch
-      response = await fetch(
-        `https://raw.githubusercontent.com/${username}/${project}/master/${path}`
-      )
-    }
+    // Get the raw file content using Octokit's REST API
+    const response = await octokit.rest.repos.getContent({
+      owner: username,
+      repo: project,
+      path: path,
+      ref: branch,
+      mediaType: {
+        format: 'raw'
+      }
+    });
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch file')
-    }
-
-    const content = await response.text()
-    const fileExtension = path.split('.').pop().toLowerCase()
+    // Extract content from response
+    const content = response.data;
+    const fileExtension = path.split('.').pop().toLowerCase();
     
     // Map common file extensions to MIME types
     const mimeTypes = {
@@ -68,30 +73,34 @@ export async function GET(request, { params }) {
     
     // Handle binary files differently
     if (binaryExtensions.includes(fileExtension)) {
-      // Get a fresh response for binary files to ensure proper streaming
-      const binaryResponse = await fetch(response.url)
+      const rawUrl = `https://raw.githubusercontent.com/${username}/${project}/${branch}/${path}`;
+      const binaryResponse = await fetch(rawUrl);
+      
       if (!binaryResponse.ok) {
-        throw new Error('Failed to fetch binary file')
+        throw new Error('Failed to fetch binary file');
       }
       
-      const arrayBuffer = await binaryResponse.arrayBuffer()
+      const arrayBuffer = await binaryResponse.arrayBuffer();
       return new NextResponse(arrayBuffer, {
         headers: {
           'Content-Type': contentType,
           'Content-Disposition': fileExtension === 'pdf' ? 'inline' : 'attachment',
         },
-      })
+      });
     }
-    
+
+    // For text files
     return new NextResponse(content, {
       headers: {
         'Content-Type': contentType,
       },
-    })
+    });
+
   } catch (error) {
+    console.error('Error fetching file:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch HTML content' },
+      { error: 'Failed to fetch content', details: error.message },
       { status: 500 }
-    )
+    );
   }
 }

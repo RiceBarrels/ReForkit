@@ -15,7 +15,6 @@ import {
     BreadcrumbItem,
     BreadcrumbLink,
     BreadcrumbList,
-    BreadcrumbPage,
     BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import React from "react"
@@ -28,6 +27,8 @@ import 'prismjs/components/prism-jsx';
 import 'prismjs/themes/prism.css';
 import './editor-styles.css';
 import { Button } from "@/components/ui/button";
+import { getGitHubContents, getBranches, getDefaultBranch } from "@/app/actions/github";
+import { Combobox } from "@/components/ui/comboBox";
 
 // Add this helper function at the top of your component
 const truncateFileName = (fileName, maxLength = 20) => {
@@ -112,6 +113,19 @@ const isImageFile = (filename) => {
     return ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico', 'jfif', 'pdf'].includes(extension);
 };
 
+// Add this helper function at the top with other helpers
+const decodeBase64Content = (content, encoding) => {
+    if (encoding === 'base64') {
+        try {
+            return atob(content.replace(/\s/g, ''));
+        } catch (e) {
+            console.error('Failed to decode base64 content:', e);
+            return content;
+        }
+    }
+    return content;
+};
+
 export default function GithubProjectPage({ params }) {
     const [data, setData] = useState([]);
     const [error, setError] = useState(null);
@@ -119,70 +133,114 @@ export default function GithubProjectPage({ params }) {
     const [selectedFile, setSelectedFile] = useState(null);
     const [fileContent, setFileContent] = useState(null);
     const [folderContents, setFolderContents] = useState({});
-    const [defaultBranch, setDefaultBranch] = useState('main'); // Default fallback
+    const [Branch, setBranch] = useState(''); 
+    const [defaultBranch, setDefaultBranch] = useState('');
+    const [allBranch, setAllBranch] = useState([]);
     const resolvedParams = use(params);
 
     useEffect(() => {
         const fetchData = async () => {
-            setSpin(true); // Changed loading to spin
+            setSpin(true);
             try {
-                // First fetch repo info to get default branch
-                const repoResponse = await fetch(`https://api.github.com/repos/${resolvedParams.username}/${resolvedParams.project}`);
-                const repoData = await repoResponse.json();
-                setDefaultBranch(repoData.default_branch);
+                // Get default branch first
+                const defaultBranchData = await getDefaultBranch(resolvedParams.username, resolvedParams.project);
+                const defaultBranchName = defaultBranchData.default_branch;
+                
+                // Set both Branch and defaultBranch
+                setBranch(defaultBranchName);
+                setDefaultBranch(defaultBranchName);
+                
+                // Get all branches
+                setAllBranch(await getBranches(resolvedParams.username, resolvedParams.project));
 
-                // Then fetch contents
-                const response = await fetch(`https://api.github.com/repos/${resolvedParams.username}/${resolvedParams.project}/contents/`);
-                const result = await response.json();
-                if (Array.isArray(result)) {
-                    // Sort the data to show folders first
-                    const sortedData = result.sort((a, b) => {
+                // Then fetch contents using the default branch
+                const response = await getGitHubContents(
+                    resolvedParams.username, 
+                    resolvedParams.project, 
+                    '', 
+                    defaultBranchName, 
+                    false
+                );
+                
+                if (Array.isArray(response.content)) {
+                    const sortedData = response.content.sort((a, b) => {
                         if (a.type === 'dir' && b.type !== 'dir') return -1;
                         if (a.type !== 'dir' && b.type === 'dir') return 1;
                         return a.name.localeCompare(b.name);
                     });
                     setData(sortedData);
-                } else {
-                    setError('Error loading repository contents');
                 }
             } catch (err) {
-                setError('Error loading repository contents');
+                setError('Error loading repository contents: ' + err);
             } finally {
-                setSpin(false); // Changed loading to spin
+                setSpin(false);
             }
         };
 
         fetchData();
     }, [resolvedParams.username, resolvedParams.project]);
 
+    // Update the handleFileClick function
     const handleFileClick = async (file) => {
         try {
-            const response = await fetch(file.download_url);
-            const content = await response.text();
-            setSelectedFile(file);
-            setFileContent(content);
+            const response = await getGitHubContents(
+                resolvedParams.username, 
+                resolvedParams.project, 
+                file.path,
+                Branch,
+                false
+            );
+            
+            if (response.success) {
+                setSelectedFile(file);
+                // Handle the response object and decode base64 content if necessary
+                if (typeof response.content === 'object') {
+                    // If it's a full GitHub API response object
+                    const content = response.content.content;
+                    const encoding = response.content.encoding;
+                    setFileContent(decodeBase64Content(content, encoding));
+                } else {
+                    // If it's just the content directly
+                    setFileContent(response.content);
+                }
+            } else {
+                setError('Error loading file contents: ' + response.message);
+            }
         } catch (err) {
+            console.error('File error:', err);
             setError('Error loading file contents');
         }
     };
 
+    // Update the handleFolderClick function
     const handleFolderClick = async (path) => {
         try {
             if (!folderContents[path]) {
-                const response = await fetch(`https://api.github.com/repos/${resolvedParams.username}/${resolvedParams.project}/contents/${path}`);
-                const result = await response.json();
-                // Sort the folder contents
-                const sortedResult = result.sort((a, b) => {
-                    if (a.type === 'dir' && b.type !== 'dir') return -1;
-                    if (a.type !== 'dir' && b.type === 'dir') return 1;
-                    return a.name.localeCompare(b.name);
-                });
-                setFolderContents(prev => ({
-                    ...prev,
-                    [path]: sortedResult
-                }));
+                const response = await getGitHubContents(
+                    resolvedParams.username,
+                    resolvedParams.project,
+                    path,
+                    Branch,
+                    false
+                );
+                
+                if (response.content && Array.isArray(response.content)) {
+                    // Sort the folder contents
+                    const sortedResult = response.content.sort((a, b) => {
+                        if (a.type === 'dir' && b.type !== 'dir') return -1;
+                        if (a.type !== 'dir' && b.type === 'dir') return 1;
+                        return a.name.localeCompare(b.name);
+                    });
+                    setFolderContents(prev => ({
+                        ...prev,
+                        [path]: sortedResult
+                    }));
+                } else {
+                    throw new Error('Failed to fetch folder contents');
+                }
             }
         } catch (err) {
+            console.error('Folder error:', err);
             setError('Error loading folder contents');
         }
     };
@@ -244,7 +302,7 @@ export default function GithubProjectPage({ params }) {
     if (spin) { // Changed loading to spin
         return (
             <div className="flex justify-center items-center h-full">
-                <motion.p
+                <motion.div
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.5 }}
@@ -252,7 +310,7 @@ export default function GithubProjectPage({ params }) {
                     <div className="loader">
                         <Loader2 className="w-4 h-4 animate-spin" />
                     </div> {/* Add your spinner here */}
-                </motion.p>
+                </motion.div>
             </div>
         );
     }
@@ -275,25 +333,62 @@ export default function GithubProjectPage({ params }) {
         <div className="p-4">
             <div className="flex gap-2">
                 <div>
-                    <Link href={`https://github.com/${resolvedParams.username}/${resolvedParams.project}`}>
-                        <motion.h1 
-                        className="text-2xl font-bold underline items-center gap-2 inline-flex"
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5 }}
-                    >
-                        <div>{resolvedParams.project}</div> 
-                            <Link2 className="w-4 h-4" />
-                        </motion.h1>
-                    </Link>
-                    <motion.p 
-                        className="text-sm text-muted-foreground"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5 }}
-                    >
-                        by: {resolvedParams.username}
-                    </motion.p>
+                    <div className="flex items-center gap-2">
+                        <Link href={`https://github.com/${resolvedParams.username}/${resolvedParams.project}`}>
+                            <motion.h1 
+                                className="text-2xl font-bold underline items-center gap-2 inline-flex"
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.5 }}
+                            >
+                                <div>{resolvedParams.project}</div> 
+                                <Link2 className="w-4 h-4" />
+                            </motion.h1>
+                        </Link>
+                        <Combobox 
+                            datas={allBranch?.branches?.map(branch => ({ 
+                                value: branch.name, 
+                                label: branch.name 
+                            })) || []}
+                            datasName="branches"
+                            defaultValue={defaultBranch}
+                            valueNow={Branch}
+                            onSelect={async (selectedBranch) => {
+                                setBranch(selectedBranch);
+                                setSpin(true);
+                                try {
+                                    // Fetch contents for the new branch
+                                    const response = await getGitHubContents(
+                                        resolvedParams.username,
+                                        resolvedParams.project,
+                                        '',
+                                        selectedBranch,
+                                        false
+                                    );
+                                    
+                                    if (response.data && Array.isArray(response.data)) {
+                                        const sortedData = response.data.sort((a, b) => {
+                                            if (a.type === 'dir' && b.type !== 'dir') return -1;
+                                            if (a.type !== 'dir' && b.type === 'dir') return 1;
+                                            return a.name.localeCompare(b.name);
+                                        });
+                                        setData(sortedData);
+                                        // Clear selected file and folder contents when changing branches
+                                        setSelectedFile(null);
+                                        setFileContent(null);
+                                        setFolderContents({});
+                                    } else {
+                                        throw new Error('Invalid response format');
+                                    }
+                                } catch (err) {
+                                    setError('Error loading branch contents');
+                                } finally {
+                                    setSpin(false);
+                                }
+                            }}
+                        />
+                    </div>
+
                     <motion.p 
                         className="text-sm text-muted-foreground"
                         initial={{ opacity: 0, y: 10 }}
@@ -307,7 +402,7 @@ export default function GithubProjectPage({ params }) {
                 <div className="flex gap-2">
                     <Button>
                         <Link 
-                            href={`/github/${resolvedParams.username}/${resolvedParams.project}/run`}
+                            href={`/github/${resolvedParams.username}/${resolvedParams.project}/${Branch}/run`}
                             className="flex items-center gap-2"
                         >
                             Run <Play className="w-4 h-4" />
@@ -316,7 +411,7 @@ export default function GithubProjectPage({ params }) {
                     <Button>Fork <BiGitRepoForked className="w-4 h-4" /></Button>
                     <Button>
                         <Link 
-                            href={`https://github.com/${resolvedParams.username}/${resolvedParams.project}/archive/refs/heads/${defaultBranch}.zip`}
+                            href={`https://github.com/${resolvedParams.username}/${resolvedParams.project}/archive/refs/heads/${Branch}.zip`}
                             className="flex items-center gap-2"
                         >
                             Download ZIP <Download className="w-4 h-4" />
@@ -454,13 +549,3 @@ const CopyButton = ({ content }) => {
         </button>
     );
 };
-
-// Example usage
-try {
-  const files = await getGitHubFiles('username', 'repo');
-  files.forEach(file => {
-    console.log(`${file.type}: ${file.path}`);
-  });
-} catch (error) {
-  console.error('Failed to get files:', error);
-}
