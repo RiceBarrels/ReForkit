@@ -1,5 +1,4 @@
 import Prism, { highlight, languages } from 'prismjs/components/prism-core';
-window.Prism = window.Prism || Prism;
 
 // Base language support - must be loaded first
 import 'prismjs/components/prism-clike';
@@ -26,6 +25,11 @@ import 'prismjs/components/prism-markdown';
 
 // Theme
 import 'prismjs/themes/prism-tomorrow.css';
+
+// Only initialize Prism on the client side
+if (typeof window !== 'undefined') {
+  window.Prism = window.Prism || Prism;
+}
 
 // Ensure base languages are registered
 if (!Prism.languages.clike) {
@@ -87,43 +91,25 @@ export const truncateFileName = (fileName, maxLength = 20) => {
   return `${truncatedName}...${extension}`;
 };
 
-export const getLanguageFromFileName = (filename) => {
-  if (!filename) return 'javascript';
-  
-  const extension = filename.split('.').pop()?.toLowerCase();
-  
-  const languageMap = {
+export function getLanguageFromFileName(filename) {
+  const ext = filename.split('.').pop().toLowerCase();
+  const langMap = {
     js: 'javascript',
-    jsx: 'jsx',
     ts: 'typescript',
-    tsx: 'tsx',
     py: 'python',
     java: 'java',
+    cpp: 'cpp',
     cs: 'csharp',
+    html: 'html',
     css: 'css',
     json: 'json',
     md: 'markdown',
-    yaml: 'yaml',
+    xml: 'xml',
     yml: 'yaml',
-    sh: 'bash',
-    bash: 'bash',
-    rb: 'ruby',
-    ruby: 'ruby',
-    sql: 'sql',
+    go: 'go',
     php: 'php',
-    html: 'markup',
-    htm: 'markup',
-    mjs: 'javascript',
+    rb: 'ruby'
   };
-
-  const language = languageMap[extension] || 'javascript';
-  
-  // Add safety check
-  if (!Prism.languages[language]) {
-    console.warn(`Language '${language}' not available, falling back to javascript`);
-    return 'javascript';
-  }
-
-  return language;
-};
+  return langMap[ext] || 'plaintext';
+}
 

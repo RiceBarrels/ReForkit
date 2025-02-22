@@ -195,77 +195,54 @@ export async function GET(request, { params }) {
 
 export async function getGitHubContents(owner, repo, path = '', branch, isAuthRequired = true) {
   try {
-    if (isAuthRequired) {
-      const session = await auth();
-      const { userId } = session;
-      if (!userId) {
-        return {
-          success: false,
-          message: 'User not authenticated'
-        };
-      }
+    // Always try to get auth token first
+    const session = await auth();
+    const { userId } = session;
+    let octokit;
 
+    if (userId) {
       const tokens = await getGitHubTokens(userId);
-      if (!tokens?.data || !Array.isArray(tokens.data) || tokens.data.length === 0) {
-        return {
-          success: false,
-          message: 'GitHub account not connected'
-        };
-      }
-
-      const githubToken = tokens.data[0]?.token;
+      const githubToken = tokens?.data?.[0]?.token;
       
-      if (!githubToken) {
+      if (githubToken) {
+        octokit = new Octokit({ auth: githubToken });
+      }
+    }
+
+    // If no auth token available and not required, use unauthenticated client
+    if (!octokit) {
+      if (isAuthRequired) {
         return {
           success: false,
-          message: 'No valid GitHub token found'
+          message: 'Authentication required to access this repository'
         };
       }
-
-      // Initialize Octokit with the Clerk-provided GitHub token
-      const octokit = new Octokit({
-        auth: githubToken
-      });
-
-      // Make the API request with the correct endpoint
-      const response = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}?ref={branch}', {
-        owner,
-        repo,
-        path,
-        branch,
-        headers: {
-          'X-GitHub-Api-Version': '2022-11-28'
-        }
-      });
-
-      return {
-        success: true,
-        content: response.data
-      };
-    } else {
-      const octokit = new Octokit();
-
-      // Make the API request with the correct endpoint
-      const response = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}?ref={branch}', {
-        owner,
-        repo,
-        path,
-        branch,
-        headers: {
-          'X-GitHub-Api-Version': '2022-11-28'
-        }
-      });
-
-      return {
-        success: true,
-        content: response.data
-      };
+      octokit = new Octokit();
     }
+
+    // Make the API request with the correct endpoint
+    const response = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+      owner,
+      repo,
+      path,
+      ...(branch ? { ref: branch } : {}),
+      headers: {
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
+
+    return {
+      success: true,
+      content: response.data
+    };
+
   } catch (error) {
     console.error('GitHub API Error:', error);
     return {
       success: false,
-      message: error.message || 'Failed to fetch from GitHub'
+      message: error.status === 404 
+        ? 'Repository or file not found. The repository might be private.'
+        : error.message || 'Failed to fetch from GitHub'
     };
   }
 }
@@ -337,3 +314,167 @@ export async function getBranches(owner, repo) {
     };
   }
 }
+
+export async function forkRepository(owner, repo) {
+  try {
+    const session = await auth();
+    const { userId } = session;
+    const tokens = await getGitHubTokens(userId);
+    const githubToken = tokens.data[0]?.token;
+
+    if (!githubToken) {
+      return {
+        success: false,
+        message: 'No valid GitHub token found'
+      };
+    }
+
+    const octokit = new Octokit({ auth: githubToken });
+
+    const response = await octokit.request('POST /repos/{owner}/{repo}/forks', {
+      owner,
+      repo,
+      headers: {
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
+
+    return {
+      success: true,
+      message: 'Repository forked successfully',
+      response: response
+    };
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return {
+      success: false,
+      message: error.message || 'Failed to fork repository'
+    };
+  }
+}
+
+export async function updateFile(owner, repo, path, branch, content) {
+  try {
+    const session = await auth();
+    const { userId } = session;
+    const tokens = await getGitHubTokens(userId);
+    const githubToken = tokens.data[0]?.token;
+
+    if (!githubToken) {
+      return {
+        success: false,
+        message: 'No valid GitHub token found'
+      };
+    }
+
+    const octokit = new Octokit({ auth: githubToken });
+
+    // Get default branch if not provided
+    let targetBranch = branch;
+    if (!targetBranch) {
+      const defaultBranchResult = await getDefaultBranch(owner, repo);
+      if (!defaultBranchResult.success) {
+        return {
+          success: false,
+          message: 'Failed to determine default branch'
+        };
+      }
+      targetBranch = defaultBranchResult.default_branch;
+    }
+
+    // First get existing file SHA
+    let sha = '';
+    try {
+      const existingFile = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+        owner,
+        repo,
+        path,
+        ref: targetBranch
+      });
+      sha = existingFile.data.sha;
+    } catch (error) {
+      if (error.status !== 404) {
+        return {
+          success: false,
+          message: error.response?.data?.message || 'Failed to check existing file'
+        };
+      }
+    }
+
+    const response = await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
+      owner,
+      repo,
+      path,
+      message: 'Update via Reforkit: ' + new Date().toISOString(),
+      content: Buffer.from(content).toString('base64'),
+      branch: targetBranch,
+      sha // Include SHA if file exists
+    });
+
+    return {
+      success: true,
+      message: 'File updated successfully',
+      response: response.data
+    };
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message || 'Failed to update file'
+    };
+  }
+}
+
+export async function createBranch(owner, repo, fromBranch, branchName) {
+  try {
+    const session = await auth();
+    const { userId } = session;
+    const tokens = await getGitHubTokens(userId);
+    const githubToken = tokens.data[0]?.token;
+
+    if (!githubToken) {
+      return {
+        success: false,
+        message: 'No valid GitHub token found'
+      };
+    }
+
+    const octokit = new Octokit({ auth: githubToken });
+
+    // First get the SHA of the default branch
+    const baseBranchRef = await octokit.request('GET /repos/{owner}/{repo}/git/ref/heads/{fromBranch}', {
+      owner,
+      repo,
+      fromBranch,
+      headers: {
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
+
+    // Then use the SHA to create new branch
+    const response = await octokit.request('POST /repos/{owner}/{repo}/git/refs', {
+      owner,
+      repo,
+      headers: {
+        'X-GitHub-Api-Version': '2022-11-28'
+      },
+      data: {
+        ref: `refs/heads/${branchName}`,
+        sha: baseBranchRef.data.object.sha // Use actual SHA from base branch
+      }
+    });
+
+    return {
+      success: true,
+      message: 'Branch created successfully',
+      response: response.data
+    };
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message || 'Failed to create branch'
+    };
+  }
+}
+

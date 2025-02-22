@@ -19,32 +19,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { Breadcrumb } from "./breadcrumb"
 
-// const datas = [
-//   {
-//     value: "next.js",
-//     label: "Next.js",
-//   },
-//   {
-//     value: "sveltekit",
-//     label: "SvelteKit",
-//   },
-//   {
-//     value: "nuxt.js",
-//     label: "Nuxt.js",
-//   },
-//   {
-//     value: "remix",
-//     label: "Remix",
-//   },
-//   {
-//     value: "astro",
-//     label: "Astro",
-//   },
-// ]
-
-export function Combobox({ datas = [], datasName = "item", defaultValue = "", valueNow = "", onSelect, ...props}) {
+export function Combobox({ datas = [], datasName = "item", defaultValue = "", valueNow = "", className = "", onSelect, ...props}) {
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState(valueNow)
 
@@ -55,7 +31,7 @@ export function Combobox({ datas = [], datasName = "item", defaultValue = "", va
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-[200px] justify-between"
+          className={cn("w-[200px] justify-between", className)}
           {...props}
         >
           {value
@@ -64,7 +40,7 @@ export function Combobox({ datas = [], datasName = "item", defaultValue = "", va
           <ChevronsUpDown className="opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[200px] p-0">
+      <PopoverContent className={cn("w-[200px] p-0", className)}>
         <Command>
           <CommandInput placeholder={`Search ${datasName}...`} className="h-9" />
           <CommandList>
@@ -75,11 +51,11 @@ export function Combobox({ datas = [], datasName = "item", defaultValue = "", va
                   key={framework.value}
                   value={framework.value}
                   onSelect={(currentValue) => {
-                    setValue(currentValue === value ? "" : currentValue)
+                    setValue(currentValue)
                     setOpen(false)
                     // Call the onSelect callback if provided
                     if (onSelect) {
-                      onSelect(currentValue === value ? "" : currentValue)
+                      onSelect(currentValue)
                     }
                   }}
                 >

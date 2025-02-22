@@ -1,0 +1,37 @@
+/* Dark theme colors */
+.monaco-dark-theme {
+    --monaco-bg: #1e1e1e;
+    --monaco-foreground: #d4d4d4;
+    --monaco-cursor: #fff;
+    --monaco-selection-bg: #264f78;
+    --monaco-line-number: #858585;
+    --monaco-line-highlight: #282828;
+    --monaco-comment: #6A9955;
+    --monaco-string: #CE9178;
+    --monaco-keyword: #569CD6;
+    --monaco-function: #DCDCAA;
+    --monaco-variable: #9CDCFE;
+    --monaco-type: #4EC9B0;
+    --monaco-number: #B5CEA8;
+    --monaco-operator: #D4D4D4;
+    --monaco-bracket: #808080;
+  }
+  
+  /* Light theme colors */
+  .monaco-light-theme {
+    --monaco-bg: #ffffff;
+    --monaco-foreground: #000000;
+    --monaco-cursor: #000000;
+    --monaco-selection-bg: #add6ff;
+    --monaco-line-number: #237893;
+    --monaco-line-highlight: #f7f7f7;
+    --monaco-comment: #008000;
+    --monaco-string: #a31515;
+    --monaco-keyword: #0000ff;
+    --monaco-function: #795e26;
+    --monaco-variable: #001080;
+    --monaco-type: #267f99;
+    --monaco-number: #098658;
+    --monaco-operator: #000000;
+    --monaco-bracket: #0431fa;
+  }

@@ -1,46 +1,33 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server';
-import { getGitHubTokens } from '@/app/actions/github';
-import { Octokit } from '@octokit/rest'
+import { getGitHubContents } from '@/app/actions/github';
 
 
 export async function GET(request, { params }) {
   const { username, project, filepath, branch } = params;
   const path = filepath.join('/')
-  const session = await auth();
-  const { userId } = session;
-  
   try {
-    const tokens = await getGitHubTokens(userId);
-    const octokit = tokens ? new Octokit({ auth: tokens.accessToken }) : new Octokit()
-
-    // Get the raw file content using Octokit's REST API
-    const response = await octokit.rest.repos.getContent({
-      owner: username,
-      repo: project,
-      path: path,
-      ref: branch,
-      mediaType: {
-        format: 'raw'
-      }
-    });
+    const result = await getGitHubContents(username, project, path, branch, false);
+    
+    if (!result.success) {
+      throw new Error(result.message);
+    }
 
     // Extract content from response
-    const content = response.data;
+    const content = result.content;
     const fileExtension = path.split('.').pop().toLowerCase();
     
     // Map common file extensions to MIME types
     const mimeTypes = {
       'html': 'text/html',
       'htm': 'text/html',
-      'asp': 'text/html', // Changed from 'text/asp' to 'text/html'
-      'jsp': 'text/html', // Changed from 'text/jsp' to 'text/html'
-      'php': 'text/html', // Changed from 'text/php' to 'text/html'
-      'py': 'text/x-python', // Changed from 'text/python' to 'text/x-python'
+      'asp': 'text/html',
+      'jsp': 'text/html',
+      'php': 'text/html',
+      'py': 'text/x-python',
       'xml': 'application/xml',
-      'aspx': 'text/html', // Changed from 'text/asp.net' to 'text/html'
+      'aspx': 'text/html',
       'css': 'text/css',
-      'js': 'application/javascript', // Changed from 'text/javascript' to 'application/javascript'
+      'js': 'application/javascript',
       'json': 'application/json',
       'txt': 'text/plain',
       'md': 'text/markdown',
@@ -73,7 +60,7 @@ export async function GET(request, { params }) {
     
     // Handle binary files differently
     if (binaryExtensions.includes(fileExtension)) {
-      const rawUrl = `https://raw.githubusercontent.com/${username}/${project}/${branch}/${path}`;
+      const rawUrl = content.download_url;
       const binaryResponse = await fetch(rawUrl);
       
       if (!binaryResponse.ok) {
@@ -89,8 +76,15 @@ export async function GET(request, { params }) {
       });
     }
 
-    // For text files
-    return new NextResponse(content, {
+    // For text files, decode the content if it's base64 encoded
+    let decodedContent;
+    if (content.encoding === 'base64') {
+      decodedContent = Buffer.from(content.content, 'base64').toString('utf-8');
+    } else {
+      decodedContent = content.content;
+    }
+
+    return new NextResponse(decodedContent, {
       headers: {
         'Content-Type': contentType,
       },

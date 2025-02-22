@@ -208,47 +208,33 @@ export function DragOverlayTab({ name }) {
 
 export function CodeEditorTab({ code, setCode, currentPath, isActive }) {
   return (
-    <div className="flex">
-      <div className="line-numbers text-muted-foreground select-none px-4 min-w-[64px] text-right flex-shrink-0 bg-[#333]">
-        {code.split('\n').map((_, i) => (
-          <div key={i + 1} className="editor-line-number text-accent-foreground bg-background">
-            {i + 1}
-          </div>
-        ))}
-      </div>
-      <div id="view">
-        <Editor
-          value={code}
-          onValueChange={setCode}
-          highlight={code => {
-            try {
-              const language = getLanguageFromFileName(currentPath);
-              console.log(language);
-              console.log(Prism.languages);
-              if (!Prism.languages[language]) {
-                console.warn(`Language '${language}' not found, using javascript`);
-                return Prism.highlight(code, Prism.languages.javascript, 'javascript');
-              }
-              return Prism.highlight(code, Prism.languages[language], language);
-            } catch (error) {
-              console.error('Highlighting error:', error);
-              return code;
-            }
-          }}
-          padding={10}
-          style={{
-            fontFamily: '"Fira code", "Fira Mono", monospace',
-            fontSize: 14,
-            backgroundColor: 'var(--background)',
-            borderRadius: '4px',
-            minWidth: '100%',
-            whiteSpace: 'pre',
-          }}
-          className="editor-wrapper whitespace-pre"
-          textareaClassName="editor-textarea whitespace-pre"
-          preClassName="editor-pre whitespace-pre"
-        />
-      </div>
+    <div className="w-full h-full">
+      <Editor
+        height="100%"
+        theme="vs-dark"
+        language={getLanguageFromFileName(currentPath)}
+        value={code}
+        onChange={setCode}
+        options={{
+          minimap: { enabled: false },
+          fontSize: 14,
+          roundedSelection: true,
+          scrollBeyondLastLine: false,
+          automaticLayout: true,
+          lineNumbers: 'on',
+          lineNumbersMinChars: 3,
+          glyphMargin: false,
+          folding: true,
+          lineDecorationsWidth: 0,
+          padding: {
+            top: 10,
+            bottom: 10
+          }
+        }}
+        onMount={(editor) => {
+          editor.focus();
+        }}
+      />
     </div>
   );
 }

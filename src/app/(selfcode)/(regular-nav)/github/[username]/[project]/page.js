@@ -21,76 +21,76 @@ import React from "react"
 import { motion } from "framer-motion"
 import Editor from 'react-simple-code-editor';
 import { highlight, languages } from 'prismjs';
+import Prism from 'prismjs';
+
+// Base languages - order matters!
+import 'prismjs/components/prism-core';
+import 'prismjs/components/prism-clike';
+import 'prismjs/components/prism-markup';
 import 'prismjs/components/prism-javascript';
+
+// Languages that depend on clike
+import 'prismjs/components/prism-java';
+import 'prismjs/components/prism-c';
+import 'prismjs/components/prism-cpp';
 import 'prismjs/components/prism-python';
+
+// Web-related languages
+import 'prismjs/components/prism-css';
+import 'prismjs/components/prism-scss';
+import 'prismjs/components/prism-markup-templating';
+import 'prismjs/components/prism-php';
+import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-jsx';
+import 'prismjs/components/prism-tsx';
+
+// Other languages
+import 'prismjs/components/prism-markdown';
+import 'prismjs/components/prism-ruby';
+import 'prismjs/components/prism-go';
+
+// Theme
 import 'prismjs/themes/prism.css';
 import './editor-styles.css';
 import { Button } from "@/components/ui/button";
-import { getGitHubContents, getBranches, getDefaultBranch } from "@/app/actions/github";
+import { getGitHubContents, getBranches, getDefaultBranch, forkRepository } from "@/app/actions/github";
 import { Combobox } from "@/components/ui/comboBox";
+
+import { useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 
 // Add this helper function at the top of your component
 const truncateFileName = (fileName, maxLength = 20) => {
     if (fileName.length <= maxLength) return fileName;
-    
-    const extension = fileName.includes('.') ? fileName.split('.').pop() : '';
-    const nameWithoutExt = fileName.includes('.') ? fileName.slice(0, fileName.lastIndexOf('.')) : fileName;
-    
-    const truncatedName = `${nameWithoutExt.slice(0, maxLength - 3 - extension.length)}...${extension ? `.${extension}` : ''}`;
-    return truncatedName;
-};
-
-const renderFileBreadcrumbs = (filePath) => {
-    const pathParts = filePath.split('/').filter(Boolean);
-    
-    return (
-        <Breadcrumb>
-            <BreadcrumbList>
-                <BreadcrumbItem>
-                    <motion.div 
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
-                    >
-                        <BreadcrumbLink>root</BreadcrumbLink>
-                    </motion.div>
-                </BreadcrumbItem>
-                {pathParts.map((part, index) => (
-                    <React.Fragment key={index}>
-                        <BreadcrumbSeparator>/</BreadcrumbSeparator>
-                        <BreadcrumbItem>
-                            <motion.div 
-                                initial={{ opacity: 0, y: -10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.3, delay: index * 0.1 }} // Delay for each part
-                            >
-                                <BreadcrumbLink>
-                                    {index === pathParts.length - 1 ? part : truncateFileName(part)}
-                                </BreadcrumbLink>
-                            </motion.div>
-                        </BreadcrumbItem>
-                    </React.Fragment>
-                ))}
-            </BreadcrumbList>
-        </Breadcrumb>
-    );
+    const start = fileName.slice(0, maxLength - 3);
+    return `${start}...`;
 };
 
 // Update the getLanguageFromFilename function
 const getLanguageFromFilename = (filename) => {
     const extension = filename.split('.').pop().toLowerCase();
-    const codeExtensions = ['js', 'jsx', 'py', 'html', 'css', 'ts', 'tsx', 'java', 'cpp', 'c', 'rb', 'php', 'go'];
+    const codeExtensions = ['js', 'jsx', 'py', 'html', 'css', 'scss', 'ts', 'tsx', 'java', 'cpp', 'c', 'rb', 'php', 'go', 'md'];
     
     if (!codeExtensions.includes(extension)) {
         return null; // Not a code file
     }
 
     const languageMap = {
+        'html': languages.html,
+        'css': languages.css,
+        'scss': languages.scss,
         'js': languages.javascript,
         'jsx': languages.jsx,
+        'ts': languages.typescript,
+        'tsx': languages.tsx,
         'py': languages.python,
-        'html': languages.html,
+        'md': languages.markdown,
+        'java': languages.java,
+        'cpp': languages.cpp,
+        'c': languages.c,
+        'rb': languages.ruby,
+        'php': languages.php,
+        'go': languages.go,
         // Add more mappings as needed
     };
     return languageMap[extension] || languages.plaintext;
@@ -126,6 +126,42 @@ const decodeBase64Content = (content, encoding) => {
     return content;
 };
 
+const renderFileBreadcrumbs = (filePath) => {
+    const pathParts = filePath.split('/').filter(Boolean);
+    
+    return (
+        <Breadcrumb>
+            <BreadcrumbList>
+                <BreadcrumbItem>
+                    <motion.div 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                    >
+                        <BreadcrumbLink>root</BreadcrumbLink>
+                    </motion.div>
+                </BreadcrumbItem>
+                {pathParts.map((part, index) => (
+                    <React.Fragment key={index}>
+                        <BreadcrumbSeparator>/</BreadcrumbSeparator>
+                        <BreadcrumbItem>
+                            <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.3, delay: index * 0.1 }}
+                            >
+                                <BreadcrumbLink>
+                                    {index === pathParts.length - 1 ? part : truncateFileName(part)}
+                                </BreadcrumbLink>
+                            </motion.div>
+                        </BreadcrumbItem>
+                    </React.Fragment>
+                ))}
+            </BreadcrumbList>
+        </Breadcrumb>
+    );
+};
+
 export default function GithubProjectPage({ params }) {
     const [data, setData] = useState([]);
     const [error, setError] = useState(null);
@@ -136,7 +172,10 @@ export default function GithubProjectPage({ params }) {
     const [Branch, setBranch] = useState(''); 
     const [defaultBranch, setDefaultBranch] = useState('');
     const [allBranch, setAllBranch] = useState([]);
+    const [isForking, setIsForking] = useState(false);
     const resolvedParams = use(params);
+    const { user } = useUser();
+    const router = useRouter();
 
     useEffect(() => {
         const fetchData = async () => {
@@ -366,8 +405,8 @@ export default function GithubProjectPage({ params }) {
                                         false
                                     );
                                     
-                                    if (response.data && Array.isArray(response.data)) {
-                                        const sortedData = response.data.sort((a, b) => {
+                                    if (response.success) {
+                                        const sortedData = response.content.sort((a, b) => {
                                             if (a.type === 'dir' && b.type !== 'dir') return -1;
                                             if (a.type !== 'dir' && b.type === 'dir') return 1;
                                             return a.name.localeCompare(b.name);
@@ -378,10 +417,10 @@ export default function GithubProjectPage({ params }) {
                                         setFileContent(null);
                                         setFolderContents({});
                                     } else {
-                                        throw new Error('Invalid response format');
+                                        throw new Error(response.message || 'Failed to fetch branch contents');
                                     }
                                 } catch (err) {
-                                    setError('Error loading branch contents');
+                                    setError('Error loading branch contents: ' + err.message);
                                 } finally {
                                     setSpin(false);
                                 }
@@ -408,7 +447,28 @@ export default function GithubProjectPage({ params }) {
                             Run <Play className="w-4 h-4" />
                         </Link>
                     </Button>
-                    <Button>Fork <BiGitRepoForked className="w-4 h-4" /></Button>
+                    <Button
+                        disabled={isForking}
+                        onClick={
+                            // is user logged in?
+                            async () => {
+                                if (user) {
+                                    setIsForking(true);
+                                    const result = await forkRepository(resolvedParams.username, resolvedParams.project);
+                                    console.log(result)
+                                    if (result.success) {
+                                        // redirect to editor
+                                        router.push(`/editor/${result.response.data.full_name}`);
+                                    }
+                                } else {
+                                    // redirect to login
+                                    router.push('/login');
+                                }
+                            }
+                        }
+                    >
+                        {isForking ? 'Forking...' : 'Fork'} {isForking ? <Loader2 className="w-4 h-4 animate-spin" /> : <BiGitRepoForked className="w-4 h-4" />}
+                    </Button>
                     <Button>
                         <Link 
                             href={`https://github.com/${resolvedParams.username}/${resolvedParams.project}/archive/refs/heads/${Branch}.zip`}

@@ -2,13 +2,15 @@
 
 import React from 'react';
 import { useEffect, useState, useRef } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
 import { SortableTab, EmptyTab, DragOverlayTab, CodeEditorTab } from '@/components/tab';
+import { ClerkProvider } from '@clerk/nextjs';
 
 import EditorShortcuts from './editor-shortcuts';
 import { SidebarProvider } from "@/components/ui/sidebar";
 import Link from "next/link";
-import { Home, Loader2, Plus, X, Folder, Settings, Play} from "lucide-react";
+import { Home, Loader2, Plus, X, Folder, Settings, Play, FilePlus, FolderPlus, FileUp, FileArchive, FolderGit, FolderGit2} from "lucide-react";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { PiRectangle, PiSidebarFill } from "react-icons/pi";
 import {
@@ -16,7 +18,6 @@ import {
     ResizablePanel,
     ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import './editor-styles.css';
 import { FileText } from "lucide-react";
 import {
   Accordion,
@@ -33,7 +34,7 @@ import {
   SidebarGroupLabel,
   SidebarMenu
 } from "@/components/ui/sidebar";
-import { getGitHubContents, getDefaultBranch } from '@/app/actions/github';
+import { getGitHubContents, getDefaultBranch, getBranches, createBranch } from '@/app/actions/github';
 import { DndContext, DragOverlay} from "@dnd-kit/core";
 import {
   useSensor,
@@ -44,8 +45,17 @@ import {
 import { SortableContext, horizontalListSortingStrategy} from "@dnd-kit/sortable";
 import { useDroppable } from '@dnd-kit/core';
 import { restrictToWindowEdges } from '@dnd-kit/modifiers';
-import { truncateFileName } from '@/utils/editor-utils';
+import { truncateFileName, getLanguageFromFileName } from '@/utils/editor-utils';
 import SettingsPage from '@/app/(selfcode)/(regular-nav)/settings/page';
+import RunHtml from './runHtml';
+import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { updateFile } from '@/app/actions/github';
+import { Combobox } from '@/components/ui/comboBox';
+import { motion } from 'framer-motion';
+import { Editor } from '@monaco-editor/react';
+import { useTheme } from "next-themes";
 
 function EditorPanel({ panel, children }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -76,15 +86,18 @@ export default function CodeEditor({ params }) {
   // Unwrap params using React.use()
   const resolvedParams = React.use(params);
   const { user: owner, repo } = resolvedParams;
+  const router = useRouter();
   
   const [files, setFiles] = useState([]);
   const [error, setError] = useState(null);
   const [code, setCode] = useState('');
   const [currentPath, setCurrentPath] = useState('');
-  const { isSignedIn } = useUser();
+  const { isLoaded, userId } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [folderContents, setFolderContents] = useState({});
-  const [branch, setBranch] = useState('');
+  const [allBranches, setAllBranches] = useState([]);
+  const [defaultBranch, setDefaultBranch] = useState('');
+  const [settingsFile, setSettingsFile] = useState({});
 
   // Add a new state to track loading state for each folder
   const [loadingFolders, setLoadingFolders] = useState({});
@@ -99,6 +112,9 @@ export default function CodeEditor({ params }) {
   const [activePanelId, setActivePanelId] = useState(1);
   const [hoveringPanelId, setHoveringPanelId] = useState(null);
 
+  const { theme } = useTheme();
+  const editorRef = useRef(null);
+
   // Add a helper function to check if file is an image
   const isImageFile = (filename) => {
     const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico'];
@@ -108,8 +124,8 @@ export default function CodeEditor({ params }) {
   // Fetch directory contents
   const fetchDirectory = async (path = '') => {
     try {
-      if (!branch) {
-        throw new Error('No branch selected');
+      if (!settingsFile.autoSaveBranch) {
+        throw new Error('No autoSaveBranch');
       }
 
       if (path === '') {
@@ -119,7 +135,7 @@ export default function CodeEditor({ params }) {
       }
       setError(null);
       
-      const result = await getGitHubContents(owner, repo, path, branch, true);
+      const result = await getGitHubContents(owner, repo, path, settingsFile.autoSaveBranch, true);
       
       if (!result.success) {
         throw new Error(result.message || 'Failed to fetch directory contents');
@@ -221,7 +237,7 @@ export default function CodeEditor({ params }) {
           return panel;
         }));
       } else {
-        const result = await getGitHubContents(owner, repo, file.path, branch, true);
+        const result = await getGitHubContents(owner, repo, file.path, settingsFile.autoSaveBranch, true);
         
         if (!result.success) {
           throw new Error(result.message || 'Failed to fetch file content');
@@ -323,14 +339,64 @@ export default function CodeEditor({ params }) {
   // Initial load
   useEffect(() => {
     const initializeRepo = async () => {
-      if (isSignedIn) {
+      if (isLoaded) {
         try {
           // Get default branch first
-          const branchResult = await getDefaultBranch(owner, repo);
-          if (branchResult.success) {
-            setBranch(branchResult.default_branch);
+          const defaultBranchResult = await getDefaultBranch(owner, repo);
+          
+          // Get settings file
+          const settingsResult = await getGitHubContents(owner, repo, '.reforkitSettings', defaultBranchResult.default_branch, true);
+          let settingsData = {};
+          
+          if (settingsResult.success) {
+            const settingsContent = atob(settingsResult.content.content.replace(/\s/g, ''));
+            settingsData = JSON.parse(settingsContent);
+            setSettingsFile(settingsData); // This is async!
+          }
+
+          // Get settings file in autoSaveBranch 
+          const autoSaveBranchSettingsResult = await getGitHubContents(owner, repo, '.reforkitSettings', settingsData.autoSaveBranch, true);
+          let autoSaveBranchSettingsData = {};
+          // If the settings are different, update the settings file in the autoSaveBranch
+          if (autoSaveBranchSettingsResult.success) {
+            const autoSaveBranchSettingsContent = atob(autoSaveBranchSettingsResult.content.content.replace(/\s/g, ''));
+            autoSaveBranchSettingsData = JSON.parse(autoSaveBranchSettingsContent);
+            if (autoSaveBranchSettingsData!=settingsData) {
+              await updateFile(owner, repo, '.reforkitSettings', settingsData.autoSaveBranch, JSON.stringify(settingsData));
+            }
+          }
+
+          // get all branches
+          const branchesResult = await getBranches(owner, repo);
+          let existingBranches = [];
+          if (branchesResult.success) {
+            existingBranches = branchesResult.branches.map(branch => branch.name);
+            setAllBranches(existingBranches);
+          }
+          console.log('allBranches', branchesResult);
+
+          // create auto save branch if it doesn't exist
+          if (settingsData.autoSaveBranch && !existingBranches.includes(settingsData.autoSaveBranch)) {
+            const autoSaveBranchResult = await createBranch(
+              owner, 
+              repo, 
+              defaultBranchResult.default_branch, 
+              settingsData.autoSaveBranch
+            );
+            
+            if (autoSaveBranchResult.success) {
+              // Update branches list with FRESH data
+              const updatedBranches = await getBranches(owner, repo);
+              if (updatedBranches.success) {
+                setAllBranches(updatedBranches.branches.map(b => b.name));
+              }
+            }
+          }
+
+          if (defaultBranchResult.success && settingsResult.success) {
+            setDefaultBranch(defaultBranchResult.default_branch);
             // Only fetch directory after we have the branch
-            const result = await getGitHubContents(owner, repo, '', branchResult.default_branch, true);
+            const result = await getGitHubContents(owner, repo, '', settingsData.autoSaveBranch, true);
             if (!result.success) {
               throw new Error(result.message || 'Failed to fetch directory contents');
             }
@@ -343,7 +409,7 @@ export default function CodeEditor({ params }) {
             
             setFiles(sortedContent);
           } else {
-            throw new Error('Failed to fetch default branch');
+            throw new Error('Failed to fetch directory contents');
           }
         } catch (err) {
           console.error("Repository initialization error:", err);
@@ -355,7 +421,14 @@ export default function CodeEditor({ params }) {
     };
 
     initializeRepo();
-  }, [isSignedIn, owner, repo]);
+  }, [isLoaded, owner, repo]);
+
+  useEffect(() => {
+    if (editorRef.current) {
+      const editorTheme = theme === 'dark' ? 'custom-dark' : 'custom-light';
+      editorRef.current.updateOptions({ theme: editorTheme });
+    }
+  }, [theme]);
 
   const renderFileTree = (items, currentPath = '') => {
     return items.map((item) => {
@@ -373,11 +446,25 @@ export default function CodeEditor({ params }) {
               }}
             >
               <div className="inline-flex items-center gap-2 w-full pr-6">
-                <Folder size={16} className="flex-shrink-0"/>
+                <div className="relative w-4 h-4 flex-shrink-0">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={{ opacity: loadingFolders[itemPath] ? 1 : 0, scale: loadingFolders[itemPath] ? 1 : 0.5 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute inset-0"
+                  >
+                    <Loader2 size={16} className="animate-spin"/>
+                  </motion.div>
+                  <motion.div
+                    initial={{ opacity: 1, scale: 1 }}
+                    animate={{ opacity: loadingFolders[itemPath] ? 0 : 1, scale: loadingFolders[itemPath] ? 0.5 : 1 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute inset-0"
+                  >
+                    <Folder size={16}/>
+                  </motion.div>
+                </div>
                 <span className="truncate min-w-0">{item.name}</span>
-                {loadingFolders[itemPath] && (
-                  <Loader2 className="w-4 h-4 animate-spin absolute right-4 top-1/2 -translate-y-1/2"/>
-                )}
               </div>
             </AccordionTrigger>
             <AccordionContent>
@@ -403,7 +490,9 @@ export default function CodeEditor({ params }) {
                 onClick={() => handleFileClick(item)}
               >
                 <FileText size={16}/>
-                {truncateFileName(item.name)}
+                <span className="truncate min-w-0">
+                  {truncateFileName(item.name)}
+                </span>
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -489,59 +578,48 @@ export default function CodeEditor({ params }) {
     const activePanelId = activeData.panelId;
 
     setPanelGroups(prev => {
-      // Find the source panel and tab
       const sourcePanel = prev.find(p => p.id === activePanelId);
+      const targetPanel = prev.find(p => p.id === overPanelId);
       const draggedTab = sourcePanel?.tabs.find(t => t.path === active.id);
-      
+
       if (!draggedTab) return prev;
 
-      // If moving within the same panel
-      if (activePanelId === overPanelId) {
-        return prev.map(panel => {
-          if (panel.id === activePanelId) {
-            const oldIndex = panel.tabs.findIndex(t => t.path === active.id);
-            const newIndex = over.data.current?.index ?? panel.tabs.length;
-            
-            const newTabs = [...panel.tabs];
-            newTabs.splice(oldIndex, 1);
-            newTabs.splice(newIndex, 0, draggedTab);
-            
-            return {
-              ...panel,
-              tabs: newTabs,
-              activeTab: draggedTab.path
-            };
-          }
-          return panel;
-        });
-      }
-
-      // Moving between panels
       return prev.map(panel => {
         if (panel.id === activePanelId) {
-          const remainingTabs = panel.tabs.filter(t => t.path !== active.id);
+          // Remove from source panel
+          const newTabs = panel.tabs.filter(t => t.path !== active.id);
           return {
             ...panel,
-            tabs: remainingTabs,
-            activeTab: remainingTabs.length > 0 ? remainingTabs[0].path : null,
-            currentContent: remainingTabs.length > 0 ? 
-              (remainingTabs[0].type === 'image' ? { type: 'image', url: remainingTabs[0].content.url } : { type: 'code' }) 
-              : { type: 'code' }
+            tabs: newTabs,
+            activeTab: newTabs[0]?.path || null,
+            currentContent: newTabs[0] ? { 
+              type: newTabs[0].type,
+              ...(newTabs[0].content && { content: newTabs[0].content })
+            } : { type: 'code' }
           };
         }
 
         if (panel.id === overPanelId) {
-          const insertIndex = over.data.current?.type === 'tab' ? over.data.current.index : panel.tabs.length;
+          // Add to target panel with full state
+          const insertIndex = over.data.current?.index ?? panel.tabs.length;
           const newTabs = [...panel.tabs];
-          newTabs.splice(insertIndex, 0, draggedTab);
+          newTabs.splice(insertIndex, 0, {
+            ...draggedTab,
+            // Preserve all properties including any transient state
+            content: draggedTab.content,
+            type: draggedTab.type,
+            path: draggedTab.path,
+            name: draggedTab.name
+          });
 
           return {
             ...panel,
             tabs: newTabs,
             activeTab: draggedTab.path,
-            currentContent: draggedTab.type === 'image' ? 
-              { type: 'image', url: draggedTab.content.url } : 
-              { type: 'code' }
+            currentContent: {
+              type: draggedTab.type,
+              ...(draggedTab.content && { content: draggedTab.content })
+            }
           };
         }
 
@@ -549,11 +627,7 @@ export default function CodeEditor({ params }) {
       });
     });
 
-    // Update code state if necessary
-    const draggedTab = panelGroups
-      .find(p => p.id === activePanelId)
-      ?.tabs.find(t => t.path === active.id);
-
+    // Preserve code state regardless of panel
     if (draggedTab?.type === 'code') {
       setCode(draggedTab.content);
     }
@@ -631,8 +705,181 @@ export default function CodeEditor({ params }) {
     }));
   };
 
+  // Add this near your other click handlers
+  const handleRunClick = () => {
+    // Generate unique ID for the preview tab
+    const previewTabId = `preview-${Date.now()}`;
+    
+    setPanelGroups(prev => prev.map(panel => {
+        if (panel.id === activePanelId) {
+            // Remove any empty tabs first
+            const filteredTabs = panel.tabs.filter(t => t.type !== 'empty');
+            
+            // Check if preview tab already exists
+            const existingTab = filteredTabs.find(t => t.type === 'preview');
+            if (existingTab) {
+                // If it exists, just update and activate it
+                return {
+                    ...panel,
+                    tabs: filteredTabs.map(t => 
+                        t.type === 'preview' 
+                            ? { ...t, content: { src: `/github/${owner}/${repo}/${settingsFile.autoSaveBranch}/run/${currentPath.split('.')[currentPath.split('.').length - 1] === 'html' ? currentPath : ''}` } }
+                            : t
+                    ),
+                    activeTab: existingTab.path,
+                    currentContent: { type: 'preview', src: `/github/${owner}/${repo}/${settingsFile.autoSaveBranch}/run/${currentPath.split('.')[currentPath.split('.').length - 1] === 'html' ? currentPath : ''}` }
+                };
+            }
+            
+            // Otherwise create a new preview tab
+            return {
+                ...panel,
+                tabs: [...filteredTabs, {
+                    path: previewTabId,
+                    name: 'Preview',
+                    type: 'preview',
+                    content: { src: `/github/${owner}/${repo}/${settingsFile.autoSaveBranch}/run/${currentPath.split('.')[currentPath.split('.').length - 1] === 'html' ? currentPath : ''}` }
+                }],
+                activeTab: previewTabId,
+                currentContent: { type: 'preview', src: `/github/${owner}/${repo}/${settingsFile.autoSaveBranch}/run/${currentPath.split('.')[currentPath.split('.').length - 1] === 'html' ? currentPath : ''}` }
+            };
+        }
+        return panel;
+    }));
+  };
+
+  // Show loading state until auth is initialized
+  if (!isLoaded) {
+    return (
+      <div className="flex justify-center items-center w-screen h-screen">
+        <Loader2 className="w-4 h-4 animate-spin"/>
+      </div>
+    );
+  }
+
+  // Redirect only after auth is fully loaded
+  if (isLoaded && !userId) {
+    router.push('/login');
+    return null;
+  }
+
+  // Move these state declarations after auth check
+  const [config, setConfig] = useState({
+    repoFullName: `${owner}/${repo}`,
+    codeKind: settingsFile.codeKind,
+    autoSaveBranch: 'reforkit-auto-save'
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCodeKindSet, setIsCodeKindSet] = useState(false);
+  const [isAutoSaveBranchSet, setIsAutoSaveBranchSet] = useState(false);
+
+  const handleSaveSettings = async () => {
+    setIsSaving(true);
+    const response = await updateFile(owner, repo, '.reforkitSettings', defaultBranch, JSON.stringify(config));
+    if (response.success) {
+      setSettingsFile(response.data);
+      // reload the page
+      window.location.reload();
+    }
+  }
+
+  useEffect(() => {
+    setIsCodeKindSet(Boolean(config.codeKind));
+    setIsAutoSaveBranchSet(config.autoSaveBranch.trim() !== '');
+  }, [config.codeKind, config.autoSaveBranch]);
+
+  if (sidebarLoading) {
+    return (
+      <div className="flex justify-center items-center w-screen h-screen">
+        <Loader2 className="w-4 h-4 animate-spin"/>
+      </div>
+    );
+  }
+
+  if (
+    Object.keys(settingsFile).length === 0 ||
+    !settingsFile.autoSaveBranch ||
+    !settingsFile.codeKind ||
+    settingsFile.repoFullName !== `${owner}/${repo}`
+  ) {
+    return (
+      <div className="flex justify-center items-center w-screen h-screen">
+        <div className="text-center max-w-md w-full">
+          <h1 className="text-2xl font-bold mb-2">Configure {owner}/{repo}</h1>
+          <p className="text-sm text-muted-foreground mb-6">
+            First time setup for Reforkit editor
+          </p>
+          <div className="flex flex-col gap-4 px-4">
+            <div className="space-y-2">
+              <Label className="block text-left font-semibold">
+                Code Environment <span className="text-red-500">*</span>
+              </Label>
+              {settingsFile.codeKind === undefined ?
+                <Combobox
+                  datas={[
+                    { value: 'vanilla', label: 'Vanilla HTML + CSS + JS' },
+                    { value: 'java', label: 'Java' },
+                    { value: 'python', label: 'Python' },
+                    { value: 'csharp', label: 'C#' },
+                    { value: 'cpp', label: 'C++' },
+                    { value: 'custom', label: 'Custom - Linux Terminal' }
+                  ]}
+                  datasName="Code Environment"
+                  valueNow={config.codeKind}
+                  onSelect={(selected) => {
+                    console.log("Selected option:", selected);
+                    const newCodeKind = typeof selected === "string" ? selected : selected;
+                    setConfig((prev) => ({ ...prev, codeKind: newCodeKind }));
+                  }}
+                  className="w-full"
+                  required
+                /> : null
+              }
+            </div>
+
+            <div className="space-y-2">
+              <Label className="block text-left font-semibold">
+                Auto-save Branch <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                placeholder="branch-name"
+                value={config.autoSaveBranch}
+                onChange={(e) => {
+                  // Update autoSaveBranch only.
+                  const newValue = e.target.value;
+                  setConfig((prev) => ({ ...prev, autoSaveBranch: newValue }));
+                }}
+                className="w-full"
+                pattern="[a-zA-Z0-9\-_]+"
+                title="Branch name can only contain letters, numbers, hyphens, and underscores"
+              />
+            </div>
+
+            <Button
+              className="w-full mt-4"
+              onClick={handleSaveSettings}
+              disabled={isSaving || !isCodeKindSet || !isAutoSaveBranchSet}
+            >
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : null}
+              {isSaving
+                ? 'Saving...'
+                : !isCodeKindSet
+                  ? 'Please select a code environment'
+                  : !isAutoSaveBranchSet
+                    ? 'Please enter a branch name'
+                    : 'Save'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <SidebarProvider className="h-screen flex">
+    <ClerkProvider>
+      <SidebarProvider className="h-screen flex">
         <ResizablePanelGroup 
             direction="horizontal" 
             className="min-h-screen rounded-lg"
@@ -648,14 +895,51 @@ export default function CodeEditor({ params }) {
                     <TooltipProvider delayDuration={100} skipDelayDuration={100}>
                         <SidebarContent className="h-full">
                             <SidebarGroup className="h-full">
-                                <SidebarGroupLabel>Editor</SidebarGroupLabel>
+                                <SidebarGroupLabel>Reforkit (Closed Beta)</SidebarGroupLabel>
+                                <Separator className="my-2"/>
                                 <SidebarGroupContent className="h-full">
+                                  <TooltipProvider delayDuration={100} skipDelayDuration={100}>
+                                    <div className="flex items-center gap-0.5 py-0.5 justify-center">
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="w-8 h-8">
+                                            <FolderPlus size={16}/>
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>New Folder <span className="text-[10px] text-muted-foreground">⌘⇧N</span></TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="w-8 h-8">
+                                            <FilePlus size={16}/>
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>New File <span className="text-[10px] text-muted-foreground">⌘N</span></TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="w-8 h-8">
+                                            <FileUp size={16}/>
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Upload <span className="text-[10px] text-muted-foreground">⌘⇧U</span></TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="w-8 h-8">
+                                            <FileArchive size={16}/>
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Download zip <span className="text-[10px] text-muted-foreground">⌘⇧D</span></TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  </TooltipProvider>
                                     <SidebarMenu className="h-full">
                                         <Accordion type="multiple" collapsible="true" defaultValue={["files"]} className="h-full">
                                             <AccordionItem value="files" className="h-full border-b-0">
                                                 <AccordionTrigger className="mx-2 py-2">
                                                     <span className="inline-flex items-center gap-2">
-                                                        <FileText size={16}/> Files
+                                                        <FolderGit2 size={16}/> {resolvedParams.repo}
                                                     </span>
                                                 </AccordionTrigger>
                                                 <AccordionContent className="mx-2 mt-2 h-[calc(100vh-8rem)] overflow-auto">
@@ -716,7 +1000,7 @@ export default function CodeEditor({ params }) {
                         <TooltipTrigger asChild>
                           <div 
                             className='align-center gap-x-1 justify-center hover:bg-accent px-2 py-1 rounded-md flex items-center max-h-6 cursor-pointer text-xs font-extrabold mx-3'
-                            onClick=''
+                            onClick={handleRunClick}
                           >
                             <Play size={16}/> <span>Run</span>
                           </div>
@@ -784,7 +1068,10 @@ export default function CodeEditor({ params }) {
                                   tabs: remainingTabs,
                                   activeTab: remainingTabs.length > 0 ? remainingTabs[0].path : null,
                                   currentContent: remainingTabs.length > 0 ? 
-                                    (remainingTabs[0].type === 'image' ? { type: 'image', url: remainingTabs[0].content.url } : { type: remainingTabs[0].type || 'code' }) 
+                                    (remainingTabs[0].type === 'image' ? { type: 'image', url: remainingTabs[0].content.url } :
+                                    remainingTabs[0].type === 'preview' ? { type: 'preview', src: remainingTabs[0].content.src } :
+                                    remainingTabs[0].type === 'settings' ? { type: 'settings' } :
+                                    { type: 'code' }) 
                                     : { type: 'code' }
                                 };
                               }
@@ -796,8 +1083,12 @@ export default function CodeEditor({ params }) {
                                   tabs: [...panel.tabs, tabToMove],
                                   activeTab: tabToMove.path,
                                   currentContent: tabToMove.type === 'image' ? 
-                                    { type: 'image', url: tabToMove.content.url } : 
-                                    { type: tabToMove.type || 'code' }
+                                    { type: 'image', url: tabToMove.content.url } :
+                                    tabToMove.type === 'preview' ?
+                                    { type: 'preview', src: tabToMove.content.src } :
+                                    tabToMove.type === 'settings' ?
+                                    { type: 'settings' } :
+                                    { type: 'code' }
                                 };
                               }
 
@@ -881,7 +1172,7 @@ export default function CodeEditor({ params }) {
                           </DragOverlay>
                         </DndContext>
                         {/* Editor content */}
-                        <div className={`h-[calc(100vh-8rem)] editor-content transition-all duration-250 py-2 pr-2 m-2 ${
+                        <div className={`h-[calc(100vh-4rem)] editor-content transition-all duration-250 ${
                           hoveringPanelId === `panel-${panel.id}` && activeId && activePanelId !== panel.id ? 
                           'opacity-65 bg-[#187cff54]' : ''
                         }`}>
@@ -924,22 +1215,60 @@ export default function CodeEditor({ params }) {
                                       overflow: panel.activeTab === tab.path ? 'auto' : 'hidden'
                                     }}
                                   >
-                                    <div className={`w-full h-full ${panel.activeTab === tab.path ? 'overflow-auto' : 'overflow-hidden'}`}>
-                                      <CodeEditorTab
-                                        code={tab.content}
-                                        setCode={(newCode) => {
+                                    <div className="w-full h-full">
+                                      <Editor
+                                        height="100%"
+                                        language={getLanguageFromFileName(tab.path)}
+                                        value={tab.content}
+                                        onChange={(value) => {
                                           setPanelGroups(prev => prev.map(p => ({
                                             ...p,
                                             tabs: p.tabs.map(t => 
-                                              t.path === tab.path ? { ...t, content: newCode } : t
+                                              t.path === tab.path ? { ...t, content: value } : t
                                             )
                                           })));
-                                          if (tab.path === panel.activeTab) {
-                                            setCode(newCode);
-                                          }
+                                          setCode(value);
                                         }}
-                                        currentPath={tab.path}
-                                        isActive={panel.activeTab === tab.path}
+                                        options={{
+                                          minimap: { enabled: false },
+                                          fontSize: 14,
+                                          roundedSelection: true,
+                                          scrollBeyondLastLine: true,
+                                          automaticLayout: true,
+                                          lineNumbers: 'on',
+                                          glyphMargin: true,
+                                          folding: true,
+                                          lineDecorationsWidth: 0,
+                                          lineNumbersMinChars: 3
+                                        }}
+                                        onMount={(editor, monaco) => {
+                                          const editorTheme = theme === 'dark' ? 'custom-dark' : 'custom-light';
+                                          editor.updateOptions({ theme: editorTheme });
+                                          
+                                          monaco.editor.defineTheme('custom-dark', {
+                                            base: 'vs-dark',
+                                            inherit: true,
+                                            rules: [],
+                                            colors: {
+                                              'editor.background': '#0a0a0a',
+                                              'editor.lineHighlightBackground': '#000000',
+                                              'editorLineNumber.foreground': '#404040',
+                                            },
+                                          });
+
+                                          monaco.editor.defineTheme('custom-light', {
+                                            base: 'vs',
+                                            inherit: true,
+                                            rules: [],
+                                            colors: {
+                                              'editor.background': '#ffffff',
+                                              'editor.lineHighlightBackground': '#ffffff',
+                                              'editorLineNumber.foreground': '#404040',
+                                            },
+                                          });
+
+                                          editor.focus();
+                                        }}
                                       />
                                     </div>
                                   </div>
@@ -978,6 +1307,19 @@ export default function CodeEditor({ params }) {
                                   <SettingsPage />
                                 </div>
                               )}
+
+                              {/* Render preview tabs */}
+                              {panel.currentContent.type === 'preview' && (
+                                <div 
+                                    className="absolute top-0 w-full h-full transition-transform duration-200 ease-in-out"
+                                    style={{ 
+                                        transform: `translateX(${panel.tabs.some(t => t.type === 'preview') ? '0%' : '100%'})`,
+                                        pointerEvents: panel.tabs.some(t => t.type === 'preview') ? 'auto' : 'none'
+                                    }}
+                                >
+                                    <RunHtml src={panel.tabs.find(t => t.type === 'preview')?.content.src} />
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1006,5 +1348,6 @@ export default function CodeEditor({ params }) {
             
         </ResizablePanelGroup>
     </SidebarProvider>
+    </ClerkProvider>
   );
 }
