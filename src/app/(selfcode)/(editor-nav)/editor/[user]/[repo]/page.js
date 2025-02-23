@@ -114,6 +114,15 @@ export default function CodeEditor({ params }) {
   const [activePanelId, setActivePanelId] = useState(1);
   const [hoveringPanelId, setHoveringPanelId] = useState(null);
 
+  const [config, setConfig] = useState({
+    repoFullName: `${owner}/${repo}`,
+    codeKind: settingsFile.codeKind,
+    autoSaveBranch: 'reforkit-auto-save'
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCodeKindSet, setIsCodeKindSet] = useState(false);
+  const [isAutoSaveBranchSet, setIsAutoSaveBranchSet] = useState(false);
+
   const { theme } = useTheme();
   const editorRef = useRef(null);
 
@@ -432,6 +441,11 @@ export default function CodeEditor({ params }) {
     }
   }, [theme]);
 
+  useEffect(() => {
+    setIsCodeKindSet(Boolean(config.codeKind));
+    setIsAutoSaveBranchSet(config.autoSaveBranch.trim() !== '');
+  }, [config.codeKind, config.autoSaveBranch]);
+
   const renderFileTree = (items, currentPath = '') => {
     return items.map((item) => {
       const itemPath = currentPath ? `${currentPath}/${item.name}` : item.name;
@@ -539,7 +553,7 @@ export default function CodeEditor({ params }) {
   useEffect(() => {
     document.addEventListener('keydown', handleShortcut);
     return () => document.removeEventListener('keydown', handleShortcut);
-  }, [sidebarOpen]);
+  }, [handleShortcut]);
 
   // Add sensor configuration
   const sensors = useSensors(
@@ -750,6 +764,17 @@ export default function CodeEditor({ params }) {
     }));
   };
 
+
+  const handleSaveSettings = async () => {
+    setIsSaving(true);
+    const response = await updateFile(owner, repo, '.reforkitSettings', defaultBranch, JSON.stringify(config));
+    if (response.success) {
+      setSettingsFile(response.data);
+      // reload the page
+      window.location.reload();
+    }
+  }
+
   // Show loading state until auth is initialized
   if (!isLoaded) {
     return (
@@ -764,31 +789,6 @@ export default function CodeEditor({ params }) {
     router.push('/login');
     return null;
   }
-
-  // Move these state declarations after auth check
-  const [config, setConfig] = useState({
-    repoFullName: `${owner}/${repo}`,
-    codeKind: settingsFile.codeKind,
-    autoSaveBranch: 'reforkit-auto-save'
-  });
-  const [isSaving, setIsSaving] = useState(false);
-  const [isCodeKindSet, setIsCodeKindSet] = useState(false);
-  const [isAutoSaveBranchSet, setIsAutoSaveBranchSet] = useState(false);
-
-  const handleSaveSettings = async () => {
-    setIsSaving(true);
-    const response = await updateFile(owner, repo, '.reforkitSettings', defaultBranch, JSON.stringify(config));
-    if (response.success) {
-      setSettingsFile(response.data);
-      // reload the page
-      window.location.reload();
-    }
-  }
-
-  useEffect(() => {
-    setIsCodeKindSet(Boolean(config.codeKind));
-    setIsAutoSaveBranchSet(config.autoSaveBranch.trim() !== '');
-  }, [config.codeKind, config.autoSaveBranch]);
 
   if (sidebarLoading) {
     return (

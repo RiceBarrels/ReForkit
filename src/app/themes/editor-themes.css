@@ -1,3 +1,6 @@
+@import 'prismjs/themes/prism-tomorrow.css';
+@import 'prismjs/themes/prism.css';
+
 /* Dark theme colors */
 .monaco-dark-theme {
     --monaco-bg: #1e1e1e;
@@ -35,6 +38,3 @@
     --monaco-operator: #000000;
     --monaco-bracket: #0431fa;
   }
-
-@import 'prismjs/themes/prism-tomorrow.css';
-@import 'prismjs/themes/prism.css';

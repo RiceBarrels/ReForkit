@@ -390,7 +390,7 @@ export default function HomePage() {
           >
             <Badge variant="secondary" className="mb-2">Support Reforkit</Badge>
             <p className="text-muted-foreground">
-              We use minimal ads to keep Reforkit free for everyone. If you'd like to support our mission and get an ad-free experience, consider becoming a patron.
+              We use minimal ads to keep Reforkit free for everyone. If you&apos;d like to support our mission and get an ad-free experience, consider becoming a patron.
             </p>
             <div className="flex gap-4 justify-center">
               <Link href="https://patreon.com/reforkit" target="_blank" rel="noopener noreferrer">

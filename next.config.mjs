@@ -6,7 +6,24 @@ const withTM = withTMFactory(["monaco-editor"]);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Your existing Next.js config here
+  webpack: (config) => {
+    // Add CSS loader configuration
+    config.module.rules.push({
+      test: /\.css$/,
+      use: [
+        'style-loader',
+        {
+          loader: 'css-loader',
+          options: {
+            importLoaders: 1,
+          },
+        },
+        'postcss-loader'
+      ],
+    });
+    
+    return config;
+  },
 };
 
 const removeImportsConfig = removeImports({
@@ -17,6 +34,16 @@ const removeImportsConfig = removeImports({
 const configWithMonaco = withTM({
   ...removeImportsConfig,
   webpack: (config, { isServer }) => {
+    // Add the CSS loader first
+    config.module.rules.push({
+      test: /\.css$/,
+      use: [
+        'style-loader',
+        'css-loader',
+        'postcss-loader'
+      ],
+    });
+
     if (!isServer) {
       config.plugins.push(
         new MonacoWebpackPlugin({

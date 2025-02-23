@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { motion } from "framer-motion"
 import { useTheme } from "next-themes"
-import { UserProfile } from "@clerk/nextjs"
 
 export function UserSettings() {
     return (
@@ -30,8 +29,6 @@ export function UserSettings() {
                 transition={{ delay: 0.3 }}
             >
                 <Separator />
-                {/* display user settings from clerk */}
-                <UserProfile />
             </motion.div>
         </motion.div>
     )

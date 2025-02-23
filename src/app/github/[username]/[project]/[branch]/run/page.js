@@ -11,7 +11,7 @@ export default function Page({ params }) {
     }, 1000)
   return (
     <div className="flex flex-col items-center justify-center h-screen space-y-4">
-      <h1 className="font-black">Loading {params.username}'s {params.project}......</h1>
+      <h1 className="font-black">Loading {params.username}&apos;s {params.project}......</h1>
       <Loader2 size="16" className='animate-spin' />
       
     </div>
