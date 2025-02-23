@@ -1381,6 +1381,7 @@ export default function CodeEditor({ params }) {
                                               'editor.lineHighlightBackground': '#000000',
                                               'editorLineNumber.foreground': '#404040',
                                             },
+                                            path: 'custom-dark-theme'
                                           });
 
                                           monaco.editor.defineTheme('custom-light', {
@@ -1392,6 +1393,7 @@ export default function CodeEditor({ params }) {
                                               'editor.lineHighlightBackground': '#ffffff',
                                               'editorLineNumber.foreground': '#404040',
                                             },
+                                            path: 'custom-light-theme'
                                           });
 
                                           editor.updateOptions({ theme: editorTheme });

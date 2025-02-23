@@ -1,0 +1,17 @@
+/* Add any custom editor styles here */
+.editor-line-number {
+  padding: 0 8px;
+  min-width: 2em;
+  text-align: right;
+  color: var(--muted-foreground);
+}
+
+.editor-textarea {
+  outline: none !important;
+}
+
+.editor-pre {
+  margin: 0 !important;
+  padding: 0 !important;
+  white-space: pre !important;
+} 

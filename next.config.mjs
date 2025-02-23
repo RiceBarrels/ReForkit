@@ -16,13 +16,15 @@ const removeImportsConfig = removeImports({
 
 const configWithMonaco = withTM({
   ...removeImportsConfig,
-  webpack: (config) => {
-    config.plugins.push(
-      new MonacoWebpackPlugin({
-        languages: ["javascript", "typescript", "json", "html", "css"],
-        filename: "static/[name].worker.js",
-      })
-    );
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.plugins.push(
+        new MonacoWebpackPlugin({
+          languages: ["javascript", "typescript", "json", "html", "css"],
+          filename: "static/chunks/[name].worker.[hash].js",
+        })
+      );
+    }
     return config;
   },
 });

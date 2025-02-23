@@ -1,5 +1,7 @@
 import localFont from "next/font/local";
 import "./globals.css";
+import "./themes/editor-themes.css";
+import "./editor-styles.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ClerkProvider } from '@clerk/nextjs'
 

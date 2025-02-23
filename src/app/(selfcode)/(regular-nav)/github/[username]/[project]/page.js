@@ -50,8 +50,6 @@ import 'prismjs/components/prism-ruby';
 import 'prismjs/components/prism-go';
 
 // Theme
-import 'prismjs/themes/prism.css';
-import './editor-styles.css';
 import { Button } from "@/components/ui/button";
 import { getGitHubContents, getBranches, getDefaultBranch, forkRepository } from "@/app/actions/github";
 import { Combobox } from "@/components/ui/comboBox";
