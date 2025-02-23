@@ -10,7 +10,7 @@ import { ClerkProvider } from '@clerk/nextjs';
 import EditorShortcuts from './editor-shortcuts';
 import { SidebarProvider } from "@/components/ui/sidebar";
 import Link from "next/link";
-import { Home, Loader2, Plus, X, Folder, Settings, Play, FilePlus, FolderPlus, FileUp, FileArchive, FolderGit, FolderGit2} from "lucide-react";
+import { Home, Loader2, Plus, X, Folder, Settings, Play, FilePlus, FolderPlus, FileUp, FileArchive, FolderGit, FolderGit2, ChevronRight} from "lucide-react";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { PiRectangle, PiSidebarFill } from "react-icons/pi";
 import {
@@ -56,6 +56,8 @@ import { Combobox } from '@/components/ui/comboBox';
 import { motion } from 'framer-motion';
 import { Editor } from '@monaco-editor/react';
 import { useTheme } from "next-themes";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 function EditorPanel({ panel, children }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -1187,18 +1189,76 @@ export default function CodeEditor({ params }) {
                                 tab.type === 'image' && (
                                   <div 
                                     key={tab.path}
-                                    className="flex justify-center items-center h-full absolute top-0 w-full transition-transform duration-200 ease-in-out"
+                                    className="flex flex-col h-full absolute top-0 w-full transition-transform duration-200 ease-in-out"
                                     style={{ 
                                       transform: `translateX(${panel.activeTab === tab.path ? '0%' : '100%'})`,
                                       pointerEvents: panel.activeTab === tab.path ? 'auto' : 'none'
                                     }}
                                   >
-                                    <img 
-                                      src={tab.content.url} 
-                                      alt={tab.path}
-                                      className="max-w-full h-auto object-contain"
-                                      style={{ maxHeight: 'calc(100vh - 8rem)' }}
-                                    />
+                                    {/* Breadcrumb */}
+                                    <div className="flex items-center justify-start">
+                                      <div key={tab.path} className="flex items-center">
+                                        <Button variant="ghost" size="icon" className="m-1 text-xs size-6">
+                                          <FolderGit2 size={10}/>
+                                        </Button>
+                                      </div>
+                                      {tab.path.split('/').map((path, index) => (
+                                        <div key={path} className="flex items-center">
+                                          <ChevronRight size={12} className="text-muted-foreground mx-1"/>
+                                          {/* onclick open a menu with the path */}
+                                          <Popover>
+                                            <PopoverTrigger asChild>
+                                              <Button 
+                                                variant="ghost" 
+                                                className="p-2 text-xs h-6 m-1"
+                                                onClick={() => {
+                                                  // Build the full path up to this segment
+                                                  const pathSegments = tab.path.split('/');
+                                                  const segmentIndex = pathSegments.indexOf(path);
+                                                  const fullPath = pathSegments.slice(0, segmentIndex + 1).join('/');
+                                                  
+                                                  if (!folderContents[fullPath]) {
+                                                    fetchDirectory(fullPath);
+                                                  }
+                                                }}
+                                              >
+                                                {path}
+                                              </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-64">
+                                              <div className="flex flex-col text-xs">
+                                                {(() => {
+                                                  // Build the full path up to this segment
+                                                  const pathSegments = tab.path.split('/');
+                                                  const segmentIndex = pathSegments.indexOf(path);
+                                                  const fullPath = pathSegments.slice(0, segmentIndex + 1).join('/');
+                                                  
+                                                  return folderContents[fullPath] ? (
+                                                    <Accordion type="multiple" className="w-full">
+                                                      {renderFileTree(
+                                                        folderContents[fullPath],
+                                                        fullPath
+                                                      )}
+                                                    </Accordion>
+                                                  ) : (
+                                                    <div className="flex justify-center py-2">
+                                                      <Loader2 className="w-4 h-4 animate-spin"/>
+                                                    </div>
+                                                  );
+                                                })()}
+                                              </div>
+                                            </PopoverContent>
+                                          </Popover>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div className="flex-1 flex justify-center p-4">
+                                      <img 
+                                        src={tab.content.url} 
+                                        alt={tab.path}
+                                        className="max-w-full h-auto object-contain"
+                                      />
+                                    </div>
                                   </div>
                                 )
                               ))}
@@ -1215,6 +1275,74 @@ export default function CodeEditor({ params }) {
                                       overflow: panel.activeTab === tab.path ? 'auto' : 'hidden'
                                     }}
                                   >
+                                    {/* Breadcrumb */}
+                                    <div className="flex items-center justify-start">
+                                      <TooltipProvider delayDuration={100} skipDelayDuration={100}></TooltipProvider>
+                                      <div key={tab.path} className="flex items-center">
+                                        <Popover>
+                                          <PopoverTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="m-1 text-xs size-6">
+                                              <FolderGit2 size={10}/>
+                                            </Button>
+                                          </PopoverTrigger>
+                                          <PopoverContent className="w-64">
+                                            <Accordion type="multiple" className="w-full max-h-82 overflow-y-auto">
+                                              {renderFileTree(files)}
+                                            </Accordion>
+                                          </PopoverContent>
+                                        </Popover>
+                                      </div>
+                                      {tab.path.split('/').map((path, index) => (
+                                        <div key={path} className="flex items-center">
+                                          <ChevronRight size={12} className="text-muted-foreground mx-1"/>
+                                          <Popover>
+                                            <PopoverTrigger asChild>
+                                              <Button 
+                                                variant="ghost" 
+                                                className="p-2 text-xs h-6 m-1"
+                                                onClick={() => {
+                                                  if (!path.includes('.')) {
+                                                    // Build the full path up to this segment
+                                                    const pathSegments = tab.path.split('/');
+                                                    const segmentIndex = pathSegments.indexOf(path);
+                                                    const fullPath = pathSegments.slice(0, segmentIndex + 1).join('/');
+                                                    
+                                                    if (!folderContents[fullPath]) {
+                                                      fetchDirectory(fullPath);
+                                                    }
+                                                  }
+                                                }}
+                                              >
+                                                {path}
+                                              </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-64">
+                                              <div className="flex flex-col">
+                                                {(() => {
+                                                  // Build the full path up to this segment
+                                                  const pathSegments = tab.path.split('/');
+                                                  const segmentIndex = pathSegments.indexOf(path);
+                                                  const fullPath = pathSegments.slice(0, segmentIndex + 1).join('/');
+                                                  
+                                                  return folderContents[fullPath] ? (
+                                                    <Accordion type="multiple" className="w-full">
+                                                      {renderFileTree(
+                                                        folderContents[fullPath],
+                                                        fullPath
+                                                      )}
+                                                    </Accordion>
+                                                  ) : (
+                                                    <div className="flex justify-center py-2">
+                                                      <Loader2 className="w-4 h-4 animate-spin"/>
+                                                    </div>
+                                                  );
+                                                })()}
+                                              </div>
+                                            </PopoverContent>
+                                          </Popover>
+                                        </div>
+                                      ))}
+                                    </div>
                                     <div className="w-full h-full">
                                       <Editor
                                         height="100%"
@@ -1243,7 +1371,6 @@ export default function CodeEditor({ params }) {
                                         }}
                                         onMount={(editor, monaco) => {
                                           const editorTheme = theme === 'dark' ? 'custom-dark' : 'custom-light';
-                                          editor.updateOptions({ theme: editorTheme });
                                           
                                           monaco.editor.defineTheme('custom-dark', {
                                             base: 'vs-dark',
@@ -1267,6 +1394,7 @@ export default function CodeEditor({ params }) {
                                             },
                                           });
 
+                                          editor.updateOptions({ theme: editorTheme });
                                           editor.focus();
                                         }}
                                       />

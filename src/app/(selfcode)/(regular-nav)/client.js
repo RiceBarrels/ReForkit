@@ -442,7 +442,7 @@ export default function HomePage() {
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold mb-4">Company</h4>
+              <h4 className="font-semibold mb-4">Me</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>About</li>
                 <li>Blog</li>
@@ -460,7 +460,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="mt-8 pt-8 border-t text-center text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Reforkit. All rights reserved.
+            © {new Date().getFullYear()} Muheng Fan. All rights reserved.
           </div>
         </div>
       </footer>
