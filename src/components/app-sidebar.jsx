@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -19,6 +20,8 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { SignedIn, SignedOut, useClerk, useUser } from "@clerk/nextjs"
 import { useTheme } from "next-themes"
+import { version,stage } from "../../package.json";
+import { Button } from "./ui/button";
 
 // Menu items.
 const items = [
@@ -90,7 +93,11 @@ export function AppSidebar() {
     router.push("/");
   };
 
-  const ThemeIcon = mounted ? (theme === 'dark' ? Moon : Sun) : null;
+  if (!mounted) {
+    return null;
+  }
+
+  const ThemeIcon = theme === 'dark' ? Sun : Moon;
 
   return (
     <Sidebar className="h-full">
@@ -100,10 +107,11 @@ export function AppSidebar() {
             initial="hidden"
             animate="visible"
             variants={sidebarVariants}
+            className="flex flex-col h-full"
           >
-            <SidebarGroupLabel className="text-xs">Application</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-xs">Reforkit ({stage} {version})</SidebarGroupLabel>
             <SidebarGroupContent className="h-full">
-              <SidebarMenu className="h-full">
+              <SidebarMenu className="h-full flex flex-col">
                 <TooltipProvider delayDuration={100} skipDelayDuration={100} className="flex items-center flex-col h-full">
                   {items.map((item, index) => (
                     <motion.div
@@ -145,15 +153,17 @@ export function AppSidebar() {
                       </SidebarMenuItem>
                     </motion.div>
                   ))}
-                  <div className="flex-1"/>
-                  <SidebarMenuItem key="user">
+                </TooltipProvider>
+              </SidebarMenu>
+            </SidebarGroupContent>
+            <SidebarFooter className="flex flex-col">
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <SidebarMenuButton className="p-2" asChild>
                           <motion.div
                             whileHover={{ scale: 1.05 }}
                             transition={{ duration: 0.2 }}
-                            className="flex items-center gap-2"
+                            className="gap-2"
                           >
                             <SignedIn>
                               {user?.imageUrl && (
@@ -182,86 +192,76 @@ export function AppSidebar() {
                         </SignedOut>
                       </TooltipContent>
                     </Tooltip>
-                  </SidebarMenuItem>
                   <div className="flex-1"/>
                   <motion.div 
-                    className="flex w-full"
+                    className="flex justify-between w-full"
                     variants={itemVariants}
                   >
-                    <SidebarMenuItem key="settings">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <SidebarMenuButton className="p-2" asChild>
+                          <Button variant="ghost" size="icon" asChild>
                             <Link href="/settings">
                               <motion.div
                                 whileHover={{ rotate: 180 }}
+                                whileTap={{ scale: 0.95, rotate: 0 }}
                                 transition={{ duration: 0.3 }}
+                              className="h-full w-full flex justify-center items-center"
                               >
-                                <Settings />
+                                <Settings className="w-4 h-4" />
                               </motion.div>
                             </Link>
-                          </SidebarMenuButton>
+                          </Button>
                         </TooltipTrigger>
                         <TooltipContent className="text-md">Settings <span className="text-xs">⌘,</span></TooltipContent>
                       </Tooltip>
-                    </SidebarMenuItem>
-                    <div className="flex-1"/>
-                    <SignedIn>
-                      <SidebarMenuItem key="logout">
+                    {/* dark mode toggle */}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                            variant="ghost"
+                            size="icon"
+                          >
+                            <motion.div
+                              whileHover={{ scale: 1.2 }}
+                              whileTap={{ scale: 0, rotate: 180 }}
+                              transition={{ duration: 0.2 }}
+                              className={"h-full w-full flex justify-center items-center " + (theme === 'dark' ? "text-yellow-200 hover:text-yellow-400" : "text-blue-800 hover:text-blue-600")}
+                            >
+                              <ThemeIcon className={"w-4 h-4"} />
+                            </motion.div>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent className="text-md">{theme === 'dark' ? 'Light' : 'Dark'} Mode <span className="text-xs">⌘T</span></TooltipContent>
+                      </Tooltip>
+                    {mounted && (
+                      <>
+                        <SignedIn>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <SidebarMenuButton 
+                            <Button 
                               onClick={handleSignOut}
-                              asChild
+                              variant="ghost"
+                              size="icon"
                             >
                               <motion.div
-                                whileHover={{ scale: 1.1, x: 5 }}
+                                whileHover={{ scaleX: 1.1 }}
+                                whileTap={{ scale: 0.95 }}
                                 transition={{ duration: 0.2 }}
+                                className="h-full w-full flex justify-center items-center"
                               >
                                 <LogOut />
                               </motion.div>
-                            </SidebarMenuButton>
+                            </Button>
                           </TooltipTrigger>
                           <TooltipContent className="text-md">Logout <span className="text-xs text-muted-foreground">⌘L</span></TooltipContent>
                         </Tooltip>
-                      </SidebarMenuItem>
-                    </SignedIn>
+                        </SignedIn>
+                      </>
+                    )}
                   </motion.div>
-                  <SidebarMenuItem key="theme">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <SidebarMenuButton 
-                          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                          className="p-2" 
-                          asChild
-                        >
-                          <motion.div
-                            whileHover={{ scale: 1.1 }}
-                            transition={{ duration: 0.2 }}
-                            data-sidebar="menu-button"
-                            data-size="default"
-                            data-active={false}
-                          >
-                            {mounted ? (
-                              theme === 'dark' ? (
-                                <Moon className="w-4 h-4" />
-                              ) : (
-                                <Sun className="w-4 h-4" />
-                              )
-                            ) : (
-                              <div className="w-4 h-4" />
-                            )}
-                          </motion.div>
-                        </SidebarMenuButton>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Toggle theme
-                      </TooltipContent>
-                    </Tooltip>
-                  </SidebarMenuItem>
-                </TooltipProvider>
-              </SidebarMenu>
-            </SidebarGroupContent>
+
+            </SidebarFooter>
           </motion.div>
         </SidebarGroup>
       </SidebarContent>

@@ -434,29 +434,28 @@ export default function HomePage() {
             </div>
             <div>
               <h4 className="font-semibold mb-4">Product</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
+              <div className="space-y-2 text-sm text-muted-foreground">
                 <li>Features</li>
                 <li>Examples</li>
                 <li>Documentation</li>
                 <li>API</li>
-              </ul>
+              </div>
             </div>
             <div>
               <h4 className="font-semibold mb-4">Me</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
+              <div className="space-y-2 text-sm text-muted-foreground">
                 <li>About</li>
                 <li>Blog</li>
-                <li>Careers</li>
                 <li>Contact</li>
-              </ul>
+              </div>
             </div>
             <div>
               <h4 className="font-semibold mb-4">Legal</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
+              <div className="space-y-2 text-sm text-muted-foreground">
                 <li>Privacy Policy</li>
                 <li>Terms of Service</li>
                 <li>Cookie Policy</li>
-              </ul>
+              </div>
             </div>
           </div>
           <div className="mt-8 pt-8 border-t text-center text-sm text-muted-foreground">

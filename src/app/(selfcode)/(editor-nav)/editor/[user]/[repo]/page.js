@@ -126,6 +126,8 @@ export default function CodeEditor({ params }) {
   const { theme } = useTheme();
   const editorRef = useRef(null);
 
+  const allowedCodeKinds = ['vanilla'];
+
   // Add a helper function to check if file is an image
   const isImageFile = (filename) => {
     const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico'];
@@ -816,15 +818,10 @@ export default function CodeEditor({ params }) {
               <Label className="block text-left font-semibold">
                 Code Environment <span className="text-red-500">*</span>
               </Label>
-              {settingsFile.codeKind === undefined ?
+              {settingsFile.codeKind === undefined || !allowedCodeKinds.includes(settingsFile.codeKind) ?
                 <Combobox
                   datas={[
-                    { value: 'vanilla', label: 'Vanilla HTML + CSS + JS' },
-                    { value: 'java', label: 'Java' },
-                    { value: 'python', label: 'Python' },
-                    { value: 'csharp', label: 'C#' },
-                    { value: 'cpp', label: 'C++' },
-                    { value: 'custom', label: 'Custom - Linux Terminal' }
+                    { value: 'vanilla', label: 'Vanilla HTML + CSS + JS' }
                   ]}
                   datasName="Code Environment"
                   valueNow={config.codeKind}

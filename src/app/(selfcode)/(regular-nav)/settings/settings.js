@@ -30,7 +30,7 @@ export default function Settings() {
             <motion.div
                 initial={{ scaleX: 0 }}
                 animate={{ scaleX: 1 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: 0.2 }}
             >
                 <Separator />
             </motion.div>
@@ -40,20 +40,15 @@ export default function Settings() {
                         <motion.h2
                             key={item.id}
                             initial={{ x: -40, opacity: 0 }}
-                            animate={{ x: 0, opacity: 1 }}
-                            transition={{ 
-                                delay: index * 0.1,
-                                type: "spring",
-                                stiffness: 100
-                            }}
+                            animate={{ x: 0, opacity: 1, transition: index*0.1 }}
                             onClick={() => setSelected(item.id)}
                             className={`text-lg font-semibold hover:scale-105 transition-all hover:bg-muted rounded-md p-2 py-1 hover:shadow-lg cursor-pointer
-                                ${selected === item.id ? "scale-125 shadow-xl -translate-x-2 bg-muted hover:scale-125 hover:shadow-xl" : ""}`}
+                                ${selected === item.id ? "bg-muted" : ""}`}
                             whileHover={{ 
-                                scale: selected === item.id ? 1.25 : 1.05,
-                                transition: { type: "spring", stiffness: 400 }
+                                scale: 1.05,
+                                transition: { duration: 0.1 }
                             }}
-                            whileTap={{ scale: 0.95 }}
+                            whileTap={{ scale: 0.95, transition: { duration: 0.1 } }}
                         >
                             {item.label}
                         </motion.h2>
@@ -62,7 +57,7 @@ export default function Settings() {
                 <motion.div
                     initial={{ scaleY: 0 }}
                     animate={{ scaleY: 1 }}
-                    transition={{ duration: 0.3 }}
+                    transition={{ duration: 0.1 }}
                 >
                     <Separator orientation='vertical' />
                 </motion.div>
@@ -73,7 +68,7 @@ export default function Settings() {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.2 }}
+                            transition={{ duration: 0.1 }}
                         >
                             {selected === "User" && <UserSettings />}
                             {selected === "Appearance" && <AppearanceSettings />}

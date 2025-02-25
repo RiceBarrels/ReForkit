@@ -1,6 +1,7 @@
 {
-  "name": "my-app",
-  "version": "0.1.0",
+  "name": "reforkit",
+  "version": "0.1.1",
+  "stage": "beta",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
