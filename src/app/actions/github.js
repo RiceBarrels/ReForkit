@@ -478,3 +478,34 @@ export async function createBranch(owner, repo, fromBranch, branchName) {
   }
 }
 
+export async function downloadZIP(owner, repo, branch, path = '') {
+  try {
+    const session = await auth();
+    const { userId } = session;
+    const tokens = await getGitHubTokens(userId);
+    const githubToken = tokens.data[0]?.token;
+
+    const octokit = githubToken ? new Octokit({ auth: githubToken }) : new Octokit();
+
+    // If path is provided, use the path-specific format for the reference
+    const ref = path != '' ? `${branch}:${path}` : branch;
+
+    const response = await octokit.request('GET /repos/{owner}/{repo}/zipball/{ref}', {
+      owner,
+      repo,
+      ref: ref
+    });
+
+    return {
+      success: true,
+      message: 'ZIP downloaded successfully',
+      response: response.data
+    };
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return {
+      success: false,
+      message: error.message || 'Failed to download ZIP'
+    };
+  }
+}

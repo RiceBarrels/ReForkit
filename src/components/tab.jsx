@@ -9,11 +9,12 @@ import { truncateFileName } from "@/utils/editor-utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { getLanguageFromFileName } from "@/utils/editor-utils";
 import Editor from 'react-simple-code-editor';
-import Prism from 'prismjs';
 import { MdOutlineUploadFile } from "react-icons/md";
+import { getFileIcon } from "@/components/editor/GetIcon";
+import { Eye } from "lucide-react";
 
 // Add this new component for sortable tabs
-export function SortableTab({ id, className, name, panelId, onClose, onClick, fileDir, panelGroups, index }) {
+export function SortableTab({ id, className, name, path, panelId, onClose, onClick, fileDir, panelGroups, index }) {
     const panel = panelGroups.find(p => p.id === panelId);
     const active = panel?.activeTab === id;
     
@@ -70,7 +71,7 @@ export function SortableTab({ id, className, name, panelId, onClose, onClick, fi
           onMouseUp={handleMouseUp}
           className="flex items-center pl-4 py-[0.50rem]"
         >
-          <span className="truncate text-sm max-w-[150px]">{name}</span>
+          <span className="mr-2">{getFileIcon(path)}</span> <span className="truncate text-sm max-w-[150px]">{name}</span>
         </div>
         <button
           className={`mx-1 p-1 hover:bg-accent-foreground/10 rounded opacity-0 transition-all duration-150 ease-in-out group-hover:opacity-100 ${active ? 'opacity-100' : 'opacity-0'}`}
@@ -88,7 +89,7 @@ export function SortableTab({ id, className, name, panelId, onClose, onClick, fi
 
 
 // Add this new component for empty tabs
-export function EmptyTab({ files, folderContents, loadingFolders, handleFileClick, owner, repo, fetchDirectory, handleOpenUtilityTabs }) {
+export function EmptyTab({ files, folderContents, loadingFolders, handleFileClick, owner, repo, fetchDirectory, handleOpenUtilityTabs, handleOpenPreviewTab }) {
     const [expandFile, setExpandFile] = useState(false);
   
     // Reuse the renderFileTree function logic but with some modifications for the empty tab view
@@ -189,6 +190,16 @@ export function EmptyTab({ files, folderContents, loadingFolders, handleFileClic
             >
                 <Settings size={16} />
                 Settings
+              </Button>
+              <Button 
+                variant="outline" 
+                className={`w-full gap-2 transition-all mb-4`}
+                onClick={() => {
+                  handleOpenPreviewTab();
+                }}
+              >
+                <Eye size={16} />
+                Preview
               </Button>
             </div>
           </div>

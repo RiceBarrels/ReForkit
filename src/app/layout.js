@@ -6,7 +6,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ClerkProvider } from '@clerk/nextjs'
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import Script from "next/script";
-
+import { Toaster } from "@/components/ui/sonner";
+import { SaveDefualtSettings } from "@/components/writeDefualtSettings";
 export const metadata = {
   title: "Reforkit",
   description: "Code Better, Together.",
@@ -21,6 +22,7 @@ export default function RootLayout({ children }) {
       <SpeedInsights />
       <html lang="en" suppressHydrationWarning>
         <head>
+          <meta charSet="UTF-8" />
           <Script
             async
             src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3107009868155466"
@@ -30,11 +32,13 @@ export default function RootLayout({ children }) {
         <body className={`antialiased flex`}>
           <ThemeProvider
             attribute="class"
-            defaultTheme="system"
+            defaultTheme="dark"
             enableSystem
             disableTransitionOnChange
           >
             {children}
+            <Toaster />
+            <SaveDefualtSettings />
           </ThemeProvider>
         </body>
       </html>

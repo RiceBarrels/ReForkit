@@ -4,13 +4,13 @@ import React from 'react';
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
-import { SortableTab, EmptyTab, DragOverlayTab, CodeEditorTab } from '@/components/tab';
+import { SortableTab, EmptyTab, DragOverlayTab } from '@/components/tab';
 import { ClerkProvider } from '@clerk/nextjs';
 
 import EditorShortcuts from './editor-shortcuts';
 import { SidebarProvider } from "@/components/ui/sidebar";
 import Link from "next/link";
-import { Home, Loader2, Plus, X, Folder, Settings, Play, FilePlus, FolderPlus, FileUp, FileArchive, FolderGit, FolderGit2, ChevronRight} from "lucide-react";
+import { Home, Loader2, Plus, X, Folder, Settings, Play, FilePlus, FolderPlus, FileUp, FileArchive, FolderGit, FolderGit2, ChevronRight, ArrowLeft, Info, ImageIcon, PlayCircle, Music} from "lucide-react";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { PiRectangle, PiSidebarFill } from "react-icons/pi";
 import {
@@ -18,7 +18,6 @@ import {
     ResizablePanel,
     ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { FileText } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -42,7 +41,7 @@ import {
   PointerSensor,
   KeyboardSensor,
 } from '@dnd-kit/core';
-import { SortableContext, horizontalListSortingStrategy} from "@dnd-kit/sortable";
+import { SortableContext, horizontalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { useDroppable } from '@dnd-kit/core';
 import { restrictToWindowEdges } from '@dnd-kit/modifiers';
 import { truncateFileName, getLanguageFromFileName } from '@/utils/editor-utils';
@@ -56,8 +55,8 @@ import { Combobox } from '@/components/ui/comboBox';
 import { motion } from 'framer-motion';
 import { Editor } from '@monaco-editor/react';
 import { useTheme } from "next-themes";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { getFileIcon } from '@/components/editor/GetIcon';
 
 function EditorPanel({ panel, children }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -85,53 +84,68 @@ function EditorPanel({ panel, children }) {
 }
 
 export default function CodeEditor({ params }) {
-  // Unwrap params using React.use()
+  // ----------------------------------------------------------------
+  // HOOKS: Always declare hooks at the top of the function!
+  // ----------------------------------------------------------------
   const resolvedParams = React.use(params);
   const { user: owner, repo } = resolvedParams;
   const router = useRouter();
+  const { isLoaded, userId } = useAuth();
   
   const [files, setFiles] = useState([]);
   const [error, setError] = useState(null);
   const [code, setCode] = useState('');
   const [currentPath, setCurrentPath] = useState('');
-  const { isLoaded, userId } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [folderContents, setFolderContents] = useState({});
   const [allBranches, setAllBranches] = useState([]);
   const [defaultBranch, setDefaultBranch] = useState('');
   const [settingsFile, setSettingsFile] = useState({});
-
-  // Add a new state to track loading state for each folder
   const [loadingFolders, setLoadingFolders] = useState({});
-
   const [sidebarLoading, setSidebarLoading] = useState(true);
-
-  // Add new state for panel groups
   const [panelGroups, setPanelGroups] = useState([
-    { id: 1, tabs: [], activeTab: null, fileLoading: false, currentContent: { type: 'code' } },
-    { id: 2, tabs: [], activeTab: null, fileLoading: false, currentContent: { type: 'code' } }
+    { id: 1, tabs: [], activeTab: null, fileLoading: false, currentContent: {} },
+    { id: 2, tabs: [{
+          "path": "preview.reforkitpreviewtab",
+          "name": "Preview",
+          "type": "preview",
+          "content": {
+              "src": ""
+          }
+      }], activeTab: null, fileLoading: false, currentContent: { "type": "preview", "src": ""} }
   ]);
   const [activePanelId, setActivePanelId] = useState(1);
   const [hoveringPanelId, setHoveringPanelId] = useState(null);
-
   const [config, setConfig] = useState({
     repoFullName: `${owner}/${repo}`,
     codeKind: settingsFile.codeKind,
     autoSaveBranch: 'reforkit-auto-save'
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isCodeKindSet, setIsCodeKindSet] = useState(false);
   const [isAutoSaveBranchSet, setIsAutoSaveBranchSet] = useState(false);
-
   const { theme } = useTheme();
   const editorRef = useRef(null);
+  const [pendingSaves, setPendingSaves] = useState([]);
 
   const allowedCodeKinds = ['vanilla'];
 
-  // Add a helper function to check if file is an image
+  // Update the isImageFile function to include more media types
   const isImageFile = (filename) => {
     const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico'];
     return imageExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+  };
+
+  // Add functions to check for video and audio files
+  const isVideoFile = (filename) => {
+    const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.wmv', '.flv', '.mkv'];
+    return videoExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+  };
+
+  const isAudioFile = (filename) => {
+    const audioExtensions = ['.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a'];
+    return audioExtensions.some(ext => filename.toLowerCase().endsWith(ext));
   };
 
   // Fetch directory contents
@@ -180,7 +194,7 @@ export default function CodeEditor({ params }) {
     }
   };
 
-  // Update handleFileClick to fix tab reopening
+  // Update handleFileClick to handle video and audio files
   const handleFileClick = async (file) => {
     try {
       // Check if tab already exists in any panel
@@ -206,6 +220,10 @@ export default function CodeEditor({ params }) {
               activeTab: existingTab.path,
               currentContent: existingTab.type === 'image' ? 
                 { type: 'image', url: existingTab.content.url } : 
+                existingTab.type === 'video' ?
+                { type: 'video', url: existingTab.content.url } :
+                existingTab.type === 'audio' ?
+                { type: 'audio', url: existingTab.content.url } :
                 { type: existingTab.type || 'code' }
             };
           }
@@ -245,6 +263,44 @@ export default function CodeEditor({ params }) {
               activeTab: file.path,
               fileLoading: false,
               currentContent: { type: 'image', url: file.download_url }
+            };
+          }
+          return panel;
+        }));
+      } else if (isVideoFile(file.name)) {
+        newTab = {
+          path: file.path,
+          name: file.name,
+          type: 'video',
+          content: { url: file.download_url }
+        };
+        setPanelGroups(prev => prev.map(panel => {
+          if (panel.id === activePanelId) {
+            return {
+              ...panel,
+              tabs: [...panel.tabs, newTab],
+              activeTab: file.path,
+              fileLoading: false,
+              currentContent: { type: 'video', url: file.download_url }
+            };
+          }
+          return panel;
+        }));
+      } else if (isAudioFile(file.name)) {
+        newTab = {
+          path: file.path,
+          name: file.name,
+          type: 'audio',
+          content: { url: file.download_url }
+        };
+        setPanelGroups(prev => prev.map(panel => {
+          if (panel.id === activePanelId) {
+            return {
+              ...panel,
+              tabs: [...panel.tabs, newTab],
+              activeTab: file.path,
+              fileLoading: false,
+              currentContent: { type: 'audio', url: file.download_url }
             };
           }
           return panel;
@@ -303,41 +359,60 @@ export default function CodeEditor({ params }) {
   // Update handleCloseTab to properly handle empty tabs
   const handleCloseTab = (path, event) => {
     event.stopPropagation();
-    
-    const panelWithTab = panelGroups.find(panel => 
-      panel.tabs.some(t => t.path === path)
-    );
 
+    // Find the panel that contains the tab.
+    const panelWithTab = panelGroups.find(panel =>
+      panel.tabs.some(tab => tab.path === path)
+    );
     if (!panelWithTab) return;
 
+    // Retrieve the tab that is being closed.
+    const closedTab = panelWithTab.tabs.find(tab => tab.path === path);
+
+    // If it's a code file, add its unsaved changes to the pendingSaves array.
+    if (closedTab && closedTab.type === 'code') {
+      setPendingSaves(prev => {
+        const index = prev.findIndex(item => item.path === path);
+        if (index !== -1) {
+          // Update the existing pending save with the latest content.
+          const updated = [...prev];
+          updated[index] = { path, content: closedTab.content };
+          return updated;
+        }
+        // Otherwise, add a new entry.
+        return [...prev, { path, content: closedTab.content }];
+      });
+    }
+
+    // Close the tab by updating the panelGroups state.
     setPanelGroups(prev => prev.map(panel => {
       if (panel.id === panelWithTab.id) {
         const remainingTabs = panel.tabs.filter(t => t.path !== path);
-        const closedTab = panel.tabs.find(t => t.path === path);
-        
-        // If this was the active tab, set a new active tab
-        let newActiveTab = null;
-        let newContent = { type: 'code' };
-        
-        if (panel.activeTab === path && remainingTabs.length > 0) {
-          const tabIndex = panel.tabs.findIndex(t => t.path === path);
-          // Try to select the previous tab, or the next one if there is no previous
-          const newIndex = Math.max(0, Math.min(tabIndex - 1, remainingTabs.length - 1));
-          const nextTab = remainingTabs[newIndex];
-          newActiveTab = nextTab.path;
-          newContent = nextTab.type === 'image' ? 
-            { type: 'image', url: nextTab.content.url } : 
-            { type: nextTab.type || 'code' };
-          
-          if (nextTab.type === 'code') {
-            setCode(nextTab.content || '');
-          }
-          setCurrentPath(nextTab.path);
-        } else if (panel.activeTab === path) {
-          setCode('');
-          setCurrentPath('');
-        }
+        let newActiveTab = panel.activeTab;
+        let newContent = panel.currentContent;
 
+        // If the closed tab was the active tab, select a new tab (if available) or clear the state.
+        if (panel.activeTab === path) {
+          if (remainingTabs.length > 0) {
+            const tabIndex = panel.tabs.findIndex(t => t.path === path);
+            // Choose the previous tab or the next one depending on the index.
+            const newIndex = Math.max(0, Math.min(tabIndex - 1, remainingTabs.length - 1));
+            const nextTab = remainingTabs[newIndex];
+            newActiveTab = nextTab.path;
+            newContent = nextTab.type === 'image'
+              ? { type: 'image', url: nextTab.content.url }
+              : { type: nextTab.type || 'code' };
+            if (nextTab.type === 'code') {
+              setCode(nextTab.content || '');
+            }
+            setCurrentPath(nextTab.path);
+          } else {
+            setCode('');
+            setCurrentPath('');
+            newActiveTab = null;
+            newContent = { type: 'code' };
+          }
+        }
         return {
           ...panel,
           tabs: remainingTabs,
@@ -365,6 +440,22 @@ export default function CodeEditor({ params }) {
             const settingsContent = atob(settingsResult.content.content.replace(/\s/g, ''));
             settingsData = JSON.parse(settingsContent);
             setSettingsFile(settingsData); // This is async!
+
+            // Update preview URL after settings are loaded
+            setPanelGroups(prev => prev.map(panel => ({
+              ...panel,
+              tabs: panel.tabs.map(tab => 
+                tab.type === 'preview' 
+                  ? {
+                      ...tab,
+                      content: { src: `/github/${owner}/${repo}/${settingsData.autoSaveBranch}/run/` }
+                    }
+                  : tab
+              ),
+              currentContent: panel.currentContent.type === 'preview' 
+                ? { type: 'preview', src: `/github/${owner}/${repo}/${settingsData.autoSaveBranch}/run/` }
+                : panel.currentContent
+            })));
           }
 
           // Get settings file in autoSaveBranch 
@@ -408,6 +499,14 @@ export default function CodeEditor({ params }) {
 
           if (defaultBranchResult.success && settingsResult.success) {
             setDefaultBranch(defaultBranchResult.default_branch);
+            setPanelGroups(prev => prev.map(panel => ({
+              ...panel,
+              activeTab: 'preview',
+              currentContent: {
+                type: 'preview',
+                src: `${owner}/${repo}/${settingsData.autoSaveBranch}/run/`
+              }
+            })));
             // Only fetch directory after we have the branch
             const result = await getGitHubContents(owner, repo, '', settingsData.autoSaveBranch, true);
             if (!result.success) {
@@ -437,6 +536,10 @@ export default function CodeEditor({ params }) {
   }, [isLoaded, owner, repo]);
 
   useEffect(() => {
+    console.log('panelGroups', panelGroups);
+  }, [panelGroups]);
+
+  useEffect(() => {
     if (editorRef.current) {
       const editorTheme = theme === 'dark' ? 'custom-dark' : 'custom-light';
       editorRef.current.updateOptions({ theme: editorTheme });
@@ -463,9 +566,12 @@ export default function CodeEditor({ params }) {
                 }
               }}
             >
-              <div className="inline-flex items-center gap-2 w-full pr-6">
-                <div className="relative w-4 h-4 flex-shrink-0">
-                  <motion.div
+              <TooltipProvider key={itemPath} delayDuration={100}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="inline-flex items-center gap-2 w-full pr-6">
+                      <div className="relative w-4 h-4 flex-shrink-0">
+                        <motion.div
                     initial={{ opacity: 0, scale: 0.5 }}
                     animate={{ opacity: loadingFolders[itemPath] ? 1 : 0, scale: loadingFolders[itemPath] ? 1 : 0.5 }}
                     transition={{ duration: 0.15 }}
@@ -482,8 +588,14 @@ export default function CodeEditor({ params }) {
                     <Folder size={16}/>
                   </motion.div>
                 </div>
-                <span className="truncate min-w-0">{item.name}</span>
-              </div>
+                  <span className="truncate min-w-0">{item.name}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                {item.name}
+              </TooltipContent>
+            </Tooltip>
+            </TooltipProvider>
             </AccordionTrigger>
             <AccordionContent>
               <div className="ml-6 pl-1 border-l-[1px]">
@@ -499,7 +611,7 @@ export default function CodeEditor({ params }) {
       }
       
       return (
-        <TooltipProvider key={itemPath}>
+        <TooltipProvider key={itemPath} delayDuration={100}>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -507,7 +619,7 @@ export default function CodeEditor({ params }) {
                 className="w-full justify-start gap-2 py-2"
                 onClick={() => handleFileClick(item)}
               >
-                <FileText size={16}/>
+                {getFileIcon(item.name)}
                 <span className="truncate min-w-0">
                   {truncateFileName(item.name)}
                 </span>
@@ -528,14 +640,14 @@ export default function CodeEditor({ params }) {
     if (panelRef.current) {
       if (sidebarOpen) {
         // Animate closing from 24 to 0
-        for (let i = 24; i >= 0; i--) {
+        for (let i = 18; i >= 0; i--) {
           setTimeout(() => {
             panelRef.current.resize(i);
-          }, (24 - i) * 5); // 5ms delay per step
+          }, (18 - i) * 5); // 5ms delay per step
         }
       } else {
         // Animate opening from 0 to 24
-        for (let i = 0; i <= 24; i++) {
+        for (let i = 0; i <= 18; i++) {
           setTimeout(() => {
             panelRef.current.resize(i);
           }, i * 5); // 5ms delay per step
@@ -578,74 +690,90 @@ export default function CodeEditor({ params }) {
   };
 
   const handleDragEnd = (event) => {
-    setTimeout(()=>setActiveId(null),0);
+    setTimeout(() => setActiveId(null), 0);
     
     const { active, over } = event;
     if (!active || !over) return;
-
-    const activeData = active.data.current;
     
-    // Extract panel ID from the over.id if it's a panel drop target
-    const overPanelId = over.id.startsWith('panel-') 
+    const activeData = active.data.current;
+    const overPanelId = over.id.startsWith('panel-')
       ? parseInt(over.id.split('-')[1])
       : over.data.current?.panelId;
-
-    // If no valid target panel, return
     if (!overPanelId) return;
-
+    
     const activePanelId = activeData.panelId;
-
+    let draggedTab;
+    
     setPanelGroups(prev => {
-      const sourcePanel = prev.find(p => p.id === activePanelId);
-      const targetPanel = prev.find(p => p.id === overPanelId);
-      const draggedTab = sourcePanel?.tabs.find(t => t.path === active.id);
-
-      if (!draggedTab) return prev;
-
-      return prev.map(panel => {
-        if (panel.id === activePanelId) {
-          // Remove from source panel
-          const newTabs = panel.tabs.filter(t => t.path !== active.id);
-          return {
-            ...panel,
-            tabs: newTabs,
-            activeTab: newTabs[0]?.path || null,
-            currentContent: newTabs[0] ? { 
-              type: newTabs[0].type,
-              ...(newTabs[0].content && { content: newTabs[0].content })
-            } : { type: 'code' }
-          };
-        }
-
-        if (panel.id === overPanelId) {
-          // Add to target panel with full state
-          const insertIndex = over.data.current?.index ?? panel.tabs.length;
-          const newTabs = [...panel.tabs];
-          newTabs.splice(insertIndex, 0, {
-            ...draggedTab,
-            // Preserve all properties including any transient state
-            content: draggedTab.content,
-            type: draggedTab.type,
-            path: draggedTab.path,
-            name: draggedTab.name
-          });
-
-          return {
-            ...panel,
-            tabs: newTabs,
-            activeTab: draggedTab.path,
-            currentContent: {
-              type: draggedTab.type,
-              ...(draggedTab.content && { content: draggedTab.content })
+      // Check if dragging within the same panel
+      if (activePanelId === overPanelId) {
+        return prev.map(panel => {
+          if (panel.id === activePanelId) {
+            const oldIndex = panel.tabs.findIndex(t => t.path === active.id);
+            const newIndex =
+              over.data.current?.index !== undefined
+                ? over.data.current.index
+                : panel.tabs.length - 1;
+            draggedTab = panel.tabs[oldIndex];
+            const newTabs = arrayMove(panel.tabs, oldIndex, newIndex);
+            return {
+              ...panel,
+              tabs: newTabs,
+              activeTab: draggedTab.path,
+              currentContent: {
+                type: draggedTab.type,
+                ...(draggedTab.content && { content: draggedTab.content })
+              }
+            };
+          }
+          return panel;
+        });
+      } else {
+        // Dragging across different panels
+        return prev.map(panel => {
+          if (panel.id === activePanelId) {
+            const newTabs = panel.tabs.filter(t => t.path !== active.id);
+            if (!draggedTab) {
+              draggedTab = panel.tabs.find(t => t.path === active.id);
             }
-          };
-        }
+            return {
+              ...panel,
+              tabs: newTabs,
+              activeTab: newTabs[0]?.path || null,
+              currentContent: newTabs[0]
+                ? {
+                    type: newTabs[0].type,
+                    ...(newTabs[0].content && { content: newTabs[0].content })
+                  }
+                : { type: 'code' }
+            };
+          }
 
-        return panel;
-      });
+          if (panel.id === overPanelId) {
+            const insertIndex = over.data.current?.index ?? panel.tabs.length;
+            const newTabs = [...panel.tabs];
+            newTabs.splice(insertIndex, 0, {
+              ...draggedTab,
+              content: draggedTab.content,
+              type: draggedTab.type,
+              path: draggedTab.path,
+              name: draggedTab.name
+            });
+            return {
+              ...panel,
+              tabs: newTabs,
+              activeTab: draggedTab.path,
+              currentContent: {
+                type: draggedTab.type,
+                ...(draggedTab.content && { content: draggedTab.content })
+              }
+            };
+          }
+          return panel;
+        });
+      }
     });
 
-    // Preserve code state regardless of panel
     if (draggedTab?.type === 'code') {
       setCode(draggedTab.content);
     }
@@ -654,7 +782,7 @@ export default function CodeEditor({ params }) {
 
   // Update handleNewTab to ensure unique IDs and proper content type
   const handleNewTab = (panelId) => {
-    const newTabId = `new-tab-${Date.now()}`; // Generate unique ID
+    const newTabId = `new-tab-${Date.now()}.reforkitnewtab`; // Generate unique ID
     setPanelGroups(prev => prev.map(panel => {
       if (panel.id === panelId) {
         // Check if there's already an empty tab
@@ -687,7 +815,7 @@ export default function CodeEditor({ params }) {
 
   const handleOpenUtilityTabs = (tabType) => {
     // Generate unique ID for the tab
-    const tabId = `${tabType}-${Date.now()}`;
+    const tabId = `${tabType}-${Date.now()}.reforkitutilitytab`;
     
     setPanelGroups(prev => prev.map(panel => {
         if (panel.id === activePanelId) {
@@ -724,51 +852,90 @@ export default function CodeEditor({ params }) {
   };
 
   // Add this near your other click handlers
-  const handleRunClick = () => {
-    // Generate unique ID for the preview tab
-    const previewTabId = `preview-${Date.now()}`;
-    
-    setPanelGroups(prev => prev.map(panel => {
-        if (panel.id === activePanelId) {
-            // Remove any empty tabs first
-            const filteredTabs = panel.tabs.filter(t => t.type !== 'empty');
-            
-            // Check if preview tab already exists
-            const existingTab = filteredTabs.find(t => t.type === 'preview');
-            if (existingTab) {
-                // If it exists, just update and activate it
-                return {
-                    ...panel,
-                    tabs: filteredTabs.map(t => 
-                        t.type === 'preview' 
-                            ? { ...t, content: { src: `/github/${owner}/${repo}/${settingsFile.autoSaveBranch}/run/${currentPath.split('.')[currentPath.split('.').length - 1] === 'html' ? currentPath : ''}` } }
-                            : t
-                    ),
-                    activeTab: existingTab.path,
-                    currentContent: { type: 'preview', src: `/github/${owner}/${repo}/${settingsFile.autoSaveBranch}/run/${currentPath.split('.')[currentPath.split('.').length - 1] === 'html' ? currentPath : ''}` }
-                };
-            }
-            
-            // Otherwise create a new preview tab
-            return {
-                ...panel,
-                tabs: [...filteredTabs, {
-                    path: previewTabId,
-                    name: 'Preview',
-                    type: 'preview',
-                    content: { src: `/github/${owner}/${repo}/${settingsFile.autoSaveBranch}/run/${currentPath.split('.')[currentPath.split('.').length - 1] === 'html' ? currentPath : ''}` }
-                }],
-                activeTab: previewTabId,
-                currentContent: { type: 'preview', src: `/github/${owner}/${repo}/${settingsFile.autoSaveBranch}/run/${currentPath.split('.')[currentPath.split('.').length - 1] === 'html' ? currentPath : ''}` }
-            };
+  const handleRunClick = async (justRefreshPreview = true) => {
+    // If there is an active file open and it is a code file, attempt an immediate save.
+    if (currentPath) {
+      const activePanel = panelGroups.find(panel => 
+        panel.tabs.some(tab => tab.path === currentPath)
+      );
+      const activeTab = activePanel?.tabs.find(tab => tab.path === currentPath);
+      
+      if (activeTab && activeTab.type === 'code') {
+        try {
+          const response = await updateFile(
+            owner,
+            repo,
+            currentPath,
+            settingsFile.autoSaveBranch,
+            activeTab.content
+          );
+          if (response.success) {
+            console.log('File saved successfully on Save & Run.');
+            // Remove this file from pendingSaves if it was previously added.
+            setPendingSaves(prev => prev.filter(item => item.path !== currentPath));
+          } else {
+            throw new Error(response.message || 'Failed to save file on Save & Run');
+          }
+        } catch (error) {
+          console.error('Error saving file on Save & Run:', error);
+          // Optionally stop further execution if saving fails.
+          return;
         }
-        return panel;
+      }
+    }
+    
+    // Build the preview URL based on whether currentPath ends with "html".
+    const previewSrc = `/github/${owner}/${repo}/${settingsFile.autoSaveBranch}/run/${
+      currentPath && currentPath.split('.').pop() === 'html' ? currentPath : ''
+    }?t=${Date.now()}`;
+    
+    // Check if a preview tab already exists.
+    const panelWithPreview = panelGroups.find(panel => 
+      panel.tabs.some(tab => tab.type === 'preview')
+    );
+    
+    if (panelWithPreview && justRefreshPreview) {
+      // Refresh the preview by updating its src with a new timestamp.
+      setPanelGroups(prev => prev.map(panel => ({
+        ...panel,
+        tabs: panel.tabs.map(tab =>
+          tab.type === 'preview'
+            ? { ...tab, content: { src: previewSrc } }
+            : tab
+        ),
+        currentContent: panel.id === panelWithPreview.id
+          ? { type: 'preview', src: previewSrc }
+          : panel.currentContent,
+        activeTab: panel.id === panelWithPreview.id 
+          ? panel.tabs.find(t => t.type === 'preview')?.path 
+          : panel.activeTab
+      })));
+      return;
+    }
+    
+    // If no preview tab exists, create one.
+    const previewTabId = `preview-${Date.now()}.reforkitpreviewtab`;
+    setPanelGroups(prev => prev.map(panel => {
+      if (panel.id === activePanelId) {
+        return {
+          ...panel,
+          tabs: [...panel.tabs, {
+            path: previewTabId,
+            name: 'Preview',
+            type: 'preview',
+            content: { src: previewSrc }
+          }],
+          activeTab: previewTabId,
+          currentContent: { type: 'preview', src: previewSrc }
+        };
+      }
+      return panel;
     }));
   };
 
 
   const handleSaveSettings = async () => {
-    setIsSaving(true);
+    setIsSavingSettings(true);
     const response = await updateFile(owner, repo, '.reforkitSettings', defaultBranch, JSON.stringify(config));
     if (response.success) {
       setSettingsFile(response.data);
@@ -777,39 +944,84 @@ export default function CodeEditor({ params }) {
     }
   }
 
-  // Show loading state until auth is initialized
+  // ----------------------------------------------------------------
+  // AUTO-SAVE EFFECT: Always installed regardless of state.
+  // ----------------------------------------------------------------
+  useEffect(() => {
+    // If there are no pending saves, or no valid branch to save to, do nothing.
+    if (pendingSaves.length === 0 || !settingsFile.autoSaveBranch) return;
+
+    // Use a delay (defaulting to 5000ms) from localStorage or fallback to 5000.
+    const delay = parseInt(localStorage.getItem('savingDelay') || '5000', 10);
+    
+    // Set a timer that will trigger saving the pending files after the delay.
+    const timer = setTimeout(async () => {
+      console.log('Auto-saving pending files', pendingSaves);
+      for (const { path, content } of pendingSaves) {
+        try {
+          const response = await updateFile(
+            owner,
+            repo,
+            path,
+            settingsFile.autoSaveBranch,
+            content
+          );
+          if (response.success) {
+            console.log(`Auto-saved file: ${path}`);
+          } else {
+            throw new Error(response.message || 'Failed to auto-save file');
+          }
+        } catch (error) {
+          console.error(`Error auto-saving file ${path}:`, error);
+        }
+      }
+      // After processing all pending saves, clear the pendingSaves array.
+      setPendingSaves([]);
+    }, delay);
+
+    // If pendingSaves changes (or the branch changes), clear the timer and restart.
+    return () => clearTimeout(timer);
+    // Notice we depend on pendingSaves and settingsFile.autoSaveBranch rather than the whole object.
+  }, [pendingSaves, owner, repo, settingsFile.autoSaveBranch]);
+  
+  // ----------------------------------------------------------------
+  // COMPUTE THE UI CONTENT: Decide what to render
+  // ----------------------------------------------------------------
+  let content;
   if (!isLoaded) {
-    return (
+    // Loading state until auth is initialized
+    content = (
       <div className="flex justify-center items-center w-screen h-screen">
         <Loader2 className="w-4 h-4 animate-spin"/>
       </div>
     );
-  }
-
-  // Redirect only after auth is fully loaded
-  if (isLoaded && !userId) {
+  } else if (!userId) {
+    // Redirect to login
     router.push('/login');
-    return null;
-  }
-
-  if (sidebarLoading) {
-    return (
+    content = null;
+  } else if (sidebarLoading) {
+    // Sidebar still loading
+    content = (
       <div className="flex justify-center items-center w-screen h-screen">
         <Loader2 className="w-4 h-4 animate-spin"/>
       </div>
     );
-  }
-
-  if (
+  } else if (
     Object.keys(settingsFile).length === 0 ||
     !settingsFile.autoSaveBranch ||
     !settingsFile.codeKind ||
     settingsFile.repoFullName !== `${owner}/${repo}`
   ) {
-    return (
+    // Render the settings configuration UI
+    content = (
       <div className="flex justify-center items-center w-screen h-screen">
         <div className="text-center max-w-md w-full">
-          <h1 className="text-2xl font-bold mb-2">Configure {owner}/{repo}</h1>
+          <Button variant="ghost" onClick={() => router.push(`/editor`)}>
+            <ArrowLeft size={16}/> <span>Back</span>
+          </Button>
+          <h1 className="text-2xl font-bold mb-2">
+            Configure {owner}/{repo}
+          </h1>
           <p className="text-sm text-muted-foreground mb-6">
             First time setup for Reforkit editor
           </p>
@@ -857,12 +1069,12 @@ export default function CodeEditor({ params }) {
             <Button
               className="w-full mt-4"
               onClick={handleSaveSettings}
-              disabled={isSaving || !isCodeKindSet || !isAutoSaveBranchSet}
+              disabled={isSavingSettings || !isCodeKindSet || !isAutoSaveBranchSet}
             >
-              {isSaving ? (
+              {isSavingSettings ? (
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
               ) : null}
-              {isSaving
+              {isSavingSettings
                 ? 'Saving...'
                 : !isCodeKindSet
                   ? 'Please select a code environment'
@@ -874,473 +1086,331 @@ export default function CodeEditor({ params }) {
         </div>
       </div>
     );
-  }
-
-  return (
-    <ClerkProvider>
-      <SidebarProvider className="h-screen flex">
-        <ResizablePanelGroup 
-            direction="horizontal" 
-            className="min-h-screen rounded-lg"
-        >
-            <ResizablePanel 
-                ref={panelRef}
-                defaultSize={24}
-                minSize={0}
-                maxSize={82}
-                collapsible={true}
-            >
-                <Sidebar className="h-full w-full bg-background" collapsible="none">
-                    <TooltipProvider delayDuration={100} skipDelayDuration={100}>
-                        <SidebarContent className="h-full">
-                            <SidebarGroup className="h-full">
-                                <SidebarGroupLabel>Reforkit (Closed Beta)</SidebarGroupLabel>
-                                <Separator className="my-2"/>
-                                <SidebarGroupContent className="h-full">
-                                  <TooltipProvider delayDuration={100} skipDelayDuration={100}>
-                                    <div className="flex items-center gap-0.5 py-0.5 justify-center">
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="w-8 h-8">
-                                            <FolderPlus size={16}/>
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>New Folder <span className="text-[10px] text-muted-foreground">⌘⇧N</span></TooltipContent>
-                                      </Tooltip>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="w-8 h-8">
-                                            <FilePlus size={16}/>
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>New File <span className="text-[10px] text-muted-foreground">⌘N</span></TooltipContent>
-                                      </Tooltip>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="w-8 h-8">
-                                            <FileUp size={16}/>
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Upload <span className="text-[10px] text-muted-foreground">⌘⇧U</span></TooltipContent>
-                                      </Tooltip>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="w-8 h-8">
-                                            <FileArchive size={16}/>
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Download zip <span className="text-[10px] text-muted-foreground">⌘⇧D</span></TooltipContent>
-                                      </Tooltip>
-                                    </div>
-                                  </TooltipProvider>
-                                    <SidebarMenu className="h-full">
-                                        <Accordion type="multiple" collapsible="true" defaultValue={["files"]} className="h-full">
-                                            <AccordionItem value="files" className="h-full border-b-0">
-                                                <AccordionTrigger className="mx-2 py-2">
-                                                    <span className="inline-flex items-center gap-2">
-                                                        <FolderGit2 size={16}/> {resolvedParams.repo}
-                                                    </span>
-                                                </AccordionTrigger>
-                                                <AccordionContent className="mx-2 mt-2 h-[calc(100vh-8rem)] overflow-auto">
-                                                    {sidebarLoading && !folderContents[currentPath] ? (
-                                                        <div className="flex justify-center py-4">
-                                                            <Loader2 className="w-4 h-4 animate-spin"/>
-                                                        </div>
-                                                    ) : error ? (
-                                                        <div className="text-destructive text-sm py-2">
-                                                            {error}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="space-y-1">
-                                                            {renderFileTree(files)}
-                                                        </div>
-                                                    )}
-                                                </AccordionContent>
-                                            </AccordionItem>
-                                        </Accordion>
-                                    </SidebarMenu>
-                                </SidebarGroupContent>
-                            </SidebarGroup>
-                        </SidebarContent>
-                    </TooltipProvider>
-                </Sidebar>
-            </ResizablePanel>
-
-            <ResizableHandle withHandle/>
-
-            <ResizablePanel className="flex flex-col">
-              <div className='max-h-6 min-h-6 flex items-center m-0.5'>
-                  <TooltipProvider delayDuration={100} skipDelayDuration={100}>
-                      <Tooltip>
-                          <TooltipTrigger asChild>
-                              <Link href="/" className="hover:bg-accent rounded-md p-1 px-4 flex items-center max-h-6">
-                                  <Home size={16}/>
-                              </Link>
-                          </TooltipTrigger>
-                          <TooltipContent>Home <span className="text-[10px] text-muted-foreground">⌘H</span></TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                          <TooltipTrigger asChild>
-                              <div 
-                                onClick={() => handleOpenUtilityTabs('settings')}
-                                className="hover:bg-accent rounded-md p-1 px-4 flex items-center max-h-6 cursor-pointer"
-                              >
-                                  <Settings size={16} className="mr-2"/>
-                                  <span className="text-sm">Settings</span>
-                              </div>
-                          </TooltipTrigger>
-                          <TooltipContent>Settings <span className="text-[10px] text-muted-foreground">⌘,</span></TooltipContent>
-                      </Tooltip>
-                  </TooltipProvider>
-                  {currentPath} {hoveringPanelId} {activeId} {activePanelId}
-                  <div className='flex-1'/>
-                  <TooltipProvider delayDuration={100} skipDelayDuration={100}>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div 
-                            className='align-center gap-x-1 justify-center hover:bg-accent px-2 py-1 rounded-md flex items-center max-h-6 cursor-pointer text-xs font-extrabold mx-3'
-                            onClick={handleRunClick}
-                          >
-                            <Play size={16}/> <span>Run</span>
-                          </div>
-                        </TooltipTrigger>
-                      <TooltipContent>Run <code className='text-xs border rounded-sm px-2 py-1'>index.html</code> <span className="text-[10px] text-muted-foreground">⌘R</span></TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-              </div>
-              {/* Editor panels */}
-        <ResizablePanelGroup 
-                direction="horizontal" 
-                className="flex flex-1 rounded-lg"
-            >
-                {panelGroups.map((panel, index) => (
-                  <React.Fragment key={panel.id}>
-                    <ResizablePanel 
-                      className={`flex flex-col relative`}
-                      id={`panel-${panel.id}`}
-                      onMouseEnter={() => {
-                        console.log('Setting hovering panel:', `panel-${panel.id}`);
-                        setHoveringPanelId(`panel-${panel.id}`);
-                      }}
-                      onMouseLeave={() => setHoveringPanelId(null)}
-                      onMouseDown={() => {
-                        console.log('Setting active panel:', panel.id);
-                        setActivePanelId(panel.id);
-                      }}
-                      onMouseUp={() => {
-                        console.log('Mouse up event');
-                        console.log('Active panel ID:', activePanelId);
-                        console.log('Hovering panel ID:', hoveringPanelId);
-                        console.log('Active ID:', activeId);
-                        console.log(parseInt(hoveringPanelId.split('-')[1]))
-                        if (activePanelId !== parseInt(hoveringPanelId.split('-')[1]) && activeId != null) {
-                          console.log('Moving tab:', {
-                            activeId,
-                            fromPanel: activePanelId,
-                            toPanel: parseInt(hoveringPanelId.split('-')[1]),
-                            hoveringPanelId
-                          });
-                          
-                          setPanelGroups(prev => {
-                            // Find the source panel that contains the active tab
-                            const sourcePanel = prev.find(p => p.tabs.some(t => t.path === activeId));
-                            if (!sourcePanel) {
-                              console.log('Source panel not found');
-                              return prev;
-                            }
-
-                            // Find the tab that's being moved
-                            const tabToMove = sourcePanel.tabs.find(t => t.path === activeId);
-                            if (!tabToMove) {
-                              console.log('Tab to move not found');
-                              return prev;
-                            }
-
-                            console.log('Moving tab:', tabToMove);
-
-                            return prev.map(panel => {
-                              // Remove tab from source panel
-                              if (panel.id === sourcePanel.id) {
-                                const remainingTabs = panel.tabs.filter(t => t.path !== activeId);
-                                return {
-                                  ...panel,
-                                  tabs: remainingTabs,
-                                  activeTab: remainingTabs.length > 0 ? remainingTabs[0].path : null,
-                                  currentContent: remainingTabs.length > 0 ? 
-                                    (remainingTabs[0].type === 'image' ? { type: 'image', url: remainingTabs[0].content.url } :
-                                    remainingTabs[0].type === 'preview' ? { type: 'preview', src: remainingTabs[0].content.src } :
-                                    remainingTabs[0].type === 'settings' ? { type: 'settings' } :
-                                    { type: 'code' }) 
-                                    : { type: 'code' }
-                                };
-                              }
-
-                              // Add tab to target panel
-                              if (panel.id === parseInt(hoveringPanelId.split('-')[1])) {
-                                return {
-                                  ...panel,
-                                  tabs: [...panel.tabs, tabToMove],
-                                  activeTab: tabToMove.path,
-                                  currentContent: tabToMove.type === 'image' ? 
-                                    { type: 'image', url: tabToMove.content.url } :
-                                    tabToMove.type === 'preview' ?
-                                    { type: 'preview', src: tabToMove.content.src } :
-                                    tabToMove.type === 'settings' ?
-                                    { type: 'settings' } :
-                                    { type: 'code' }
-                                };
-                              }
-
-                              return panel;
-                            });
-                          });
-
-                          // Update code state if necessary
-                          const movedTab = panelGroups
-                            .find(p => p.tabs.some(t => t.path === activeId))
-                            ?.tabs.find(t => t.path === activeId);
-
-                          if (movedTab?.type === 'code') {
-                            setCode(movedTab.content);
-                          }
-                          setCurrentPath(movedTab?.path || '');
-                        }
-                      }}
-                      minSize={24}
-                    >
-                      <EditorPanel panel={panel}>
-                        {/* Add tabs */}
-                        <DndContext
-                          sensors={sensors}
-                          onDragStart={handleDragStart}
-                          onDragEnd={handleDragEnd}
-                          onDragCancel={handleDragCancel}
-                          modifiers={[restrictToWindowEdges]}
-                        >
-                          <div
-                            className='flex overflow-x-auto overflow-y-hidden border-y w-full h-12 justify-start items-center relative'
-                          >
-                            <SortableContext
-                              items={panel.tabs.map(tab => tab.path)}
-                              strategy={horizontalListSortingStrategy}
-                            >
-                              <div className="flex items-center">
-                                {panel.tabs.map((tab, index) => (
-                                  
-                                  <SortableTab
-                                    key={tab.path}
-                                    id={tab.path}
-                                    name={truncateFileName(tab.name)}
-                                    panelId={panel.id}
-                                    panelGroups={panelGroups}
-                                    index={index}
-                                    className={hoveringPanelId !== `panel-${panel.id}` && hoveringPanelId && activeId === tab.path ? 'scale-[0!important] w-0' : '' + " transition-all scale-100"}
-                                    onClick={() => {
-                                      setPanelGroups(prev => prev.map(p => ({
-                                        ...p,
-                                        activeTab: p.id === panel.id ? tab.path : p.activeTab,
-                                        currentContent: p.id === panel.id ? { type: tab.type } : p.currentContent
-                                      })));
-                                      if (tab.type === 'code') {
-                                        setCode(tab.content);
-                                      }
-                                      setCurrentPath(tab.path);
-                                    }}
-                                    onClose={(e) => handleCloseTab(tab.path, e)}
-                                    fileDir={tab.path}
-                                  />
-                                ))}
-                              </div>
-                            </SortableContext>
-                            <div 
-                              className="flex p-1 items-center mx-4 my-1 rounded-md bg-[#88888820] backdrop-blur-md border border-[#88888820] cursor-pointer hover:bg-[#88888830] hover:border-[#88888830] hover:scale-105 active:scale-100 active:bg-[#88888840] active:border-[#88888840] active:z-10 group transition-[transform,border,background] hover:transition-[transform,border,background] active:transition-[border,background] duration-150 ease-in-out"
-                              onClick={() => handleNewTab(panel.id)}
-                            >
-                              <Plus size={16}/>
-                            </div>
-                          </div>
-                          <DragOverlay 
-                            dropAnimation={{
-                              duration: 150,
-                              easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
-                            }}
-                            
-                            className="opacity-95 pointer-events-none"
-                          >
-                            {activeId ? <DragOverlayTab name={truncateFileName(activeId)} /> : null}
-                          </DragOverlay>
-                        </DndContext>
-                        {/* Editor content */}
-                        <div className={`h-[calc(100vh-4rem)] editor-content transition-all duration-250 ${
-                          hoveringPanelId === `panel-${panel.id}` && activeId && activePanelId !== panel.id ? 
-                          'opacity-65 bg-[#187cff54]' : ''
-                        }`}>
-                          {panel.fileLoading ? (
-                            <div className="flex justify-center py-4">
-                              <Loader2 className="w-6 h-6 animate-spin"/>
-                            </div>
-                          ) : (
-                            <div className="relative w-full h-full">
-                              {/* Render all image tabs */}
-                              {panel.tabs.map(tab => (
-                                tab.type === 'image' && (
-                                  <div 
-                                    key={tab.path}
-                                    className="flex flex-col h-full absolute top-0 w-full transition-transform duration-200 ease-in-out"
-                                    style={{ 
-                                      transform: `translateX(${panel.activeTab === tab.path ? '0%' : '100%'})`,
-                                      pointerEvents: panel.activeTab === tab.path ? 'auto' : 'none'
-                                    }}
-                                  >
-                                    {/* Breadcrumb */}
-                                    <div className="flex items-center justify-start">
-                                      <div key={tab.path} className="flex items-center">
-                                        <Button variant="ghost" size="icon" className="m-1 text-xs size-6">
-                                          <FolderGit2 size={10}/>
-                                        </Button>
-                                      </div>
-                                      {tab.path.split('/').map((path, index) => (
-                                        <div key={path} className="flex items-center">
-                                          <ChevronRight size={12} className="text-muted-foreground mx-1"/>
-                                          {/* onclick open a menu with the path */}
-                                          <Popover>
-                                            <PopoverTrigger asChild>
-                                              <Button 
-                                                variant="ghost" 
-                                                className="p-2 text-xs h-6 m-1"
-                                                onClick={() => {
-                                                  // Build the full path up to this segment
-                                                  const pathSegments = tab.path.split('/');
-                                                  const segmentIndex = pathSegments.indexOf(path);
-                                                  const fullPath = pathSegments.slice(0, segmentIndex + 1).join('/');
-                                                  
-                                                  if (!folderContents[fullPath]) {
-                                                    fetchDirectory(fullPath);
-                                                  }
-                                                }}
-                                              >
-                                                {path}
-                                              </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-64">
-                                              <div className="flex flex-col text-xs">
-                                                {(() => {
-                                                  // Build the full path up to this segment
-                                                  const pathSegments = tab.path.split('/');
-                                                  const segmentIndex = pathSegments.indexOf(path);
-                                                  const fullPath = pathSegments.slice(0, segmentIndex + 1).join('/');
-                                                  
-                                                  return folderContents[fullPath] ? (
-                                                    <Accordion type="multiple" className="w-full">
-                                                      {renderFileTree(
-                                                        folderContents[fullPath],
-                                                        fullPath
-                                                      )}
-                                                    </Accordion>
-                                                  ) : (
-                                                    <div className="flex justify-center py-2">
-                                                      <Loader2 className="w-4 h-4 animate-spin"/>
-                                                    </div>
-                                                  );
-                                                })()}
-                                              </div>
-                                            </PopoverContent>
-                                          </Popover>
-                                        </div>
-                                      ))}
-                                    </div>
-                                    <div className="flex-1 flex justify-center p-4">
-                                      <img 
-                                        src={tab.content.url} 
-                                        alt={tab.path}
-                                        className="max-w-full h-auto object-contain"
-                                      />
-                                    </div>
-                                  </div>
-                                )
-                              ))}
-
-                              {/* Render all code tabs */}
-                              {panel.tabs.map(tab => (
-                                tab.type === 'code' && (
-                                  <div 
-                                    key={tab.path}
-                                    className="absolute top-0 w-full h-full transition-transform duration-200 ease-in-out"
-                                    style={{ 
-                                      transform: `translateX(${panel.activeTab === tab.path ? '0%' : '100%'})`,
-                                      pointerEvents: panel.activeTab === tab.path ? 'auto' : 'none',
-                                      overflow: panel.activeTab === tab.path ? 'auto' : 'hidden'
-                                    }}
-                                  >
-                                    {/* Breadcrumb */}
-                                    <div className="flex items-center justify-start">
-                                      <TooltipProvider delayDuration={100} skipDelayDuration={100}></TooltipProvider>
-                                      <div key={tab.path} className="flex items-center">
-                                        <Popover>
-                                          <PopoverTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="m-1 text-xs size-6">
-                                              <FolderGit2 size={10}/>
+  } else {
+    // MAIN CONTENT: Render your editor, sidebar, tabs, etc.
+    content = (
+      <ClerkProvider>
+        <SidebarProvider className="h-screen flex">
+          <ResizablePanelGroup 
+              direction="horizontal" 
+              className="min-h-screen rounded-lg"
+          >
+              <ResizablePanel 
+                  ref={panelRef}
+                  defaultSize={18}
+                  minSize={0}
+                  maxSize={50}
+                  collapsible={true}
+              >
+                  <Sidebar className="h-full w-full bg-background" collapsible="none">
+                      <TooltipProvider delayDuration={100} skipDelayDuration={100}>
+                          <SidebarContent className="h-full">
+                              <SidebarGroup className="h-full">
+                                  <SidebarGroupLabel>Reforkit (Closed Beta)</SidebarGroupLabel>
+                                  <Separator className="my-2"/>
+                                  <SidebarGroupContent className="h-full">
+                                    <TooltipProvider delayDuration={100} skipDelayDuration={100}>
+                                      <div className="flex items-center gap-0.5 py-0.5 justify-center">
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="w-8 h-8">
+                                              <FolderPlus size={16}/>
                                             </Button>
-                                          </PopoverTrigger>
-                                          <PopoverContent className="w-64">
-                                            <Accordion type="multiple" className="w-full max-h-82 overflow-y-auto">
-                                              {renderFileTree(files)}
-                                            </Accordion>
-                                          </PopoverContent>
-                                        </Popover>
+                                          </TooltipTrigger>
+                                          <TooltipContent>New Folder <span className="text-[10px] text-muted-foreground">⌘⇧N</span></TooltipContent>
+                                        </Tooltip>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="w-8 h-8">
+                                              <FilePlus size={16}/>
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>New File <span className="text-[10px] text-muted-foreground">⌘N</span></TooltipContent>
+                                        </Tooltip>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="w-8 h-8">
+                                              <FileUp size={16}/>
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>Upload <span className="text-[10px] text-muted-foreground">⌘⇧U</span></TooltipContent>
+                                        </Tooltip>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="w-8 h-8">
+                                              <FileArchive size={16}/>
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>Download zip <span className="text-[10px] text-muted-foreground">⌘⇧D</span></TooltipContent>
+                                        </Tooltip>
                                       </div>
-                                      {tab.path.split('/').map((path, index) => (
-                                        <div key={path} className="flex items-center">
-                                          <ChevronRight size={12} className="text-muted-foreground mx-1"/>
-                                          <Popover>
-                                            <PopoverTrigger asChild>
-                                              <Button 
-                                                variant="ghost" 
-                                                className="p-2 text-xs h-6 m-1"
-                                                onClick={() => {
-                                                  if (!path.includes('.')) {
-                                                    // Build the full path up to this segment
-                                                    const pathSegments = tab.path.split('/');
-                                                    const segmentIndex = pathSegments.indexOf(path);
-                                                    const fullPath = pathSegments.slice(0, segmentIndex + 1).join('/');
-                                                    
-                                                    if (!folderContents[fullPath]) {
-                                                      fetchDirectory(fullPath);
-                                                    }
-                                                  }
-                                                }}
-                                              >
-                                                {path}
-                                              </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-64">
-                                              <div className="flex flex-col">
-                                                {(() => {
-                                                  // Build the full path up to this segment
-                                                  const pathSegments = tab.path.split('/');
-                                                  const segmentIndex = pathSegments.indexOf(path);
-                                                  const fullPath = pathSegments.slice(0, segmentIndex + 1).join('/');
-                                                  
-                                                  return folderContents[fullPath] ? (
-                                                    <Accordion type="multiple" className="w-full">
-                                                      {renderFileTree(
-                                                        folderContents[fullPath],
-                                                        fullPath
+                                    </TooltipProvider>
+                                      <SidebarMenu className="h-full">
+                                          <Accordion type="multiple" collapsible="true" defaultValue={["files"]} className="h-full">
+                                              <AccordionItem value="files" className="h-full border-b-0">
+                                                  <AccordionTrigger className="mx-2 py-2">
+                                                      <span className="inline-flex items-center gap-2">
+                                                          <FolderGit2 size={16}/> {resolvedParams.repo}
+                                                      </span>
+                                                  </AccordionTrigger>
+                                                  <AccordionContent className="mx-2 mt-2 h-[calc(100vh-8rem)] overflow-auto">
+                                                      {sidebarLoading && !folderContents[currentPath] ? (
+                                                          <div className="flex justify-center py-4">
+                                                              <Loader2 className="w-4 h-4 animate-spin"/>
+                                                          </div>
+                                                      ) : error ? (
+                                                          <div className="text-destructive text-sm py-2">
+                                                              {error}
+                                                          </div>
+                                                      ) : (
+                                                          <div className="space-y-1">
+                                                              {renderFileTree(files)}
+                                                          </div>
                                                       )}
-                                                    </Accordion>
-                                                  ) : (
-                                                    <div className="flex justify-center py-2">
-                                                      <Loader2 className="w-4 h-4 animate-spin"/>
-                                                    </div>
-                                                  );
-                                                })()}
-                                              </div>
-                                            </PopoverContent>
-                                          </Popover>
-                                        </div>
-                                      ))}
+                                                  </AccordionContent>
+                                              </AccordionItem>
+                                          </Accordion>
+                                      </SidebarMenu>
+                                  </SidebarGroupContent>
+                              </SidebarGroup>
+                          </SidebarContent>
+                      </TooltipProvider>
+                  </Sidebar>
+              </ResizablePanel>
+
+              <ResizableHandle withHandle/>
+
+              <ResizablePanel className="flex flex-col">
+                <div className='max-h-6 min-h-6 flex items-center m-0.5'>
+                    <TooltipProvider delayDuration={100} skipDelayDuration={100}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Link href="/" className="hover:bg-accent rounded-md p-1 px-4 flex items-center max-h-6">
+                                    <Home size={16}/>
+                                </Link>
+                            </TooltipTrigger>
+                            <TooltipContent>Home <span className="text-[10px] text-muted-foreground">⌘H</span></TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div 
+                                  onClick={() => handleOpenUtilityTabs('settings')}
+                                  className="hover:bg-accent rounded-md p-1 px-4 flex items-center max-h-6 cursor-pointer"
+                                >
+                                    <Settings size={16} className="mr-2"/>
+                                    <span className="text-sm">Settings</span>
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent>Settings <span className="text-[10px] text-muted-foreground">⌘,</span></TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                    {currentPath} {hoveringPanelId} {activeId} {activePanelId}
+                    <div className='flex-1'/>
+                    <TooltipProvider delayDuration={100} skipDelayDuration={100}>
+                      <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div 
+                              className='align-center gap-x-1 justify-center hover:bg-accent px-2 py-1 rounded-md flex items-center max-h-6 cursor-pointer text-xs font-extrabold mx-3'
+                              onClick={handleRunClick}
+                            >
+                              <Play size={16}/> <span>Save & Run</span>
+                            </div>
+                          </TooltipTrigger>
+                        <TooltipContent>
+                          Run {currentPath ? 
+                            <code className='text-xs border rounded-sm px-2 py-1'>
+                              {currentPath.split('.')[currentPath.split('.').length - 1] === 'html' ? currentPath : 'index.html'}
+                            </code> 
+                            : <code className='text-xs border rounded-sm px-2 py-1'>index.html</code>
+                          } <span className="text-[10px] text-muted-foreground">⌘R</span>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                </div>
+                {/* Editor panels */}
+          <ResizablePanelGroup 
+                  direction="horizontal" 
+                  className="flex flex-1 rounded-lg"
+              >
+                  {panelGroups.map((panel, index) => (
+                    <React.Fragment key={panel.id}>
+                      <ResizablePanel 
+                        className={`flex flex-col relative`}
+                        id={`panel-${panel.id}`}
+                        onMouseEnter={() => {
+                          setHoveringPanelId(`panel-${panel.id}`);
+                        }}
+                        onMouseLeave={() => setHoveringPanelId(null)}
+                        onMouseDown={() => {
+                          console.log('Setting active panel:', panel.id);
+                          setActivePanelId(panel.id);
+                        }}
+                        onMouseUp={() => {
+                          if (activeId && hoveringPanelId) {
+                            const targetPanelId = parseInt(hoveringPanelId.split('-')[1]);
+                            if (activePanelId !== targetPanelId) {
+                              // Only move the tab if it hasn't been handled already by the drag-and-drop.
+                              setPanelGroups(prev => {
+                                const sourcePanel = prev.find(p => p.tabs.some(t => t.path === activeId));
+                                if (!sourcePanel) return prev;
+
+                                const tabToMove = sourcePanel.tabs.find(t => t.path === activeId);
+                                if (!tabToMove) return prev;
+
+                                return prev.map(panel => {
+                                  // Remove tab from source panel
+                                  if (panel.id === sourcePanel.id) {
+                                    const remainingTabs = panel.tabs.filter(t => t.path !== activeId);
+                                    return {
+                                      ...panel,
+                                      tabs: remainingTabs,
+                                      activeTab: remainingTabs.length ? remainingTabs[0].path : null,
+                                      currentContent: remainingTabs.length
+                                        ? (remainingTabs[0].type === 'image'
+                                            ? { type: 'image', url: remainingTabs[0].content.url }
+                                            : remainingTabs[0].type === 'code' ? { type: 'code' } : { type: remainingTabs[0].type })
+                                        : { type: 'code' }
+                                    };
+                                  }
+
+                                  // Add tab to target panel
+                                  if (panel.id === targetPanelId) {
+                                    return {
+                                      ...panel,
+                                      tabs: [...panel.tabs, tabToMove],
+                                      activeTab: tabToMove.path,
+                                      currentContent: { type: tabToMove.type, ...(tabToMove.content && { content: tabToMove.content }) }
+                                    };
+                                  }
+                                  return panel;
+                                });
+                              });
+                            }
+                          }
+                        }}
+                        minSize={24}
+                      >
+                        <EditorPanel panel={panel}>
+                          {/* Add tabs */}
+                          <DndContext
+                            sensors={sensors}
+                            onDragStart={handleDragStart}
+                            onDragEnd={handleDragEnd}
+                            onDragCancel={handleDragCancel}
+                            modifiers={[restrictToWindowEdges]}
+                          >
+                            <div
+                              className='flex overflow-x-auto overflow-y-hidden border-y w-full h-12 justify-start items-center relative'
+                            >
+                              <SortableContext
+                                items={panel.tabs.map(tab => tab.path)}
+                                strategy={horizontalListSortingStrategy}
+                              >
+                                <div className="flex items-center">
+                                  {panel.tabs.map((tab, index) => (
+                                    
+                                    <SortableTab
+                                      key={tab.path}
+                                      id={tab.path}
+                                      name={truncateFileName(tab.name)}
+                                      path={tab.path}
+                                      panelId={panel.id}
+                                      panelGroups={panelGroups}
+                                      index={index}
+                                      className={hoveringPanelId !== `panel-${panel.id}` && hoveringPanelId && activeId === tab.path ? 'scale-[0!important] w-0' : '' + " transition-all scale-100"}
+                                      onClick={() => {
+                                        setPanelGroups(prev => prev.map(p => ({
+                                          ...p,
+                                          activeTab: p.id === panel.id ? tab.path : p.activeTab,
+                                          currentContent: p.id === panel.id ? { type: tab.type } : p.currentContent
+                                        })));
+                                        if (tab.type === 'code') {
+                                          setCode(tab.content);
+                                        }
+                                        setCurrentPath(tab.path);
+                                      }}
+                                      onClose={(e) => handleCloseTab(tab.path, e)}
+                                      onMouseDown=""
+                                      fileDir={tab.path}
+                                    />
+                                  ))}
+                                </div>
+                              </SortableContext>
+                              <div 
+                                className="flex p-1 items-center mx-4 my-1 rounded-md bg-[#88888820] backdrop-blur-md border border-[#88888820] cursor-pointer hover:bg-[#88888830] hover:border-[#88888830] hover:scale-105 active:scale-100 active:bg-[#88888840] active:border-[#88888840] active:z-10 group transition-[transform,border,background] hover:transition-[transform,border,background] active:transition-[border,background] duration-150 ease-in-out"
+                                onClick={() => handleNewTab(panel.id)}
+                              >
+                                <Plus size={16}/>
+                              </div>
+                            </div>
+                            <DragOverlay 
+                              dropAnimation={{
+                                duration: 150,
+                                easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+                              }}
+                              
+                              className="opacity-95 pointer-events-none"
+                            >
+                              {activeId ? <DragOverlayTab name={truncateFileName(activeId)} /> : null}
+                            </DragOverlay>
+                          </DndContext>
+                          {/* Editor content */}
+                          <div className={`h-[calc(100vh-4rem)] editor-content transition-all duration-250 ${
+                            hoveringPanelId === `panel-${panel.id}` && activeId && activePanelId !== panel.id ? 
+                            'opacity-65 bg-[#187cff54]' : ''
+                          }`}>
+                            {panel.fileLoading ? (
+                              <div className="flex justify-center py-4">
+                                <Loader2 className="w-6 h-6 animate-spin"/>
+                              </div>
+                            ) : (
+                              <div className="relative w-full h-full">
+                                {/* Render image/video/audio media tabs */}
+                                {panel.tabs.map(tab => (
+                                  (tab.type === 'image' || tab.type === 'video' || tab.type === 'audio') && (
+                                    <div 
+                                      key={tab.path}
+                                      className="flex flex-col h-full absolute top-0 w-full transition-transform duration-200 ease-in-out"
+                                      style={{ 
+                                        transform: `translateX(${panel.activeTab === tab.path ? '0%' : '100%'})`,
+                                        pointerEvents: panel.activeTab === tab.path ? 'auto' : 'none'
+                                      }}
+                                    >
+                                      {tab.type === 'image' && (
+                                        <img 
+                                          src={tab.content.url} 
+                                          alt={tab.path}
+                                          className="max-w-full h-auto object-contain"
+                                        />
+                                      )}
+                                      {tab.type === 'video' && (
+                                        <video controls className="max-w-full h-auto">
+                                          <source src={tab.content.url}/>
+                                          Your browser does not support the video tag.
+                                        </video>
+                                      )}
+                                      {tab.type === 'audio' && (
+                                        <audio controls className="w-full mt-8">
+                                          <source src={tab.content.url}/>
+                                          Your browser does not support the audio tag.
+                                        </audio>
+                                      )}
                                     </div>
-                                    <div className="w-full h-full">
+                                  )
+                                ))}
+
+                                {/* Render code tabs */}
+                                {panel.tabs.map(tab => (
+                                  tab.type === 'code' && (
+                                    <div 
+                                      key={tab.path}
+                                      className="absolute top-0 w-full h-full transition-transform duration-200 ease-in-out"
+                                      style={{ 
+                                        transform: `translateX(${panel.activeTab === tab.path ? '0%' : '100%'})`,
+                                        pointerEvents: panel.activeTab === tab.path ? 'auto' : 'none',
+                                        overflow: panel.activeTab === tab.path ? 'auto' : 'hidden'
+                                      }}
+                                    >
                                       <Editor
                                         height="100%"
                                         language={getLanguageFromFileName(tab.path)}
@@ -1348,11 +1418,20 @@ export default function CodeEditor({ params }) {
                                         onChange={(value) => {
                                           setPanelGroups(prev => prev.map(p => ({
                                             ...p,
-                                            tabs: p.tabs.map(t => 
+                                            tabs: p.tabs.map(t =>
                                               t.path === tab.path ? { ...t, content: value } : t
                                             )
                                           })));
                                           setCode(value);
+                                          setPendingSaves(prev => {
+                                            const index = prev.findIndex(item => item.path === tab.path);
+                                            if (index !== -1) {
+                                              const updated = [...prev];
+                                              updated[index] = { path: tab.path, content: value };
+                                              return updated;
+                                            }
+                                            return [...prev, { path: tab.path, content: value }];
+                                          });
                                         }}
                                         options={{
                                           minimap: { enabled: false },
@@ -1364,11 +1443,11 @@ export default function CodeEditor({ params }) {
                                           glyphMargin: true,
                                           folding: true,
                                           lineDecorationsWidth: 0,
-                                          lineNumbersMinChars: 3
+                                          lineNumbersMinChars: 3,
+                                          wordWrap: localStorage.getItem("codeWarp") === 'true' ? 'on' : 'off',
                                         }}
                                         onMount={(editor, monaco) => {
                                           const editorTheme = theme === 'dark' ? 'custom-dark' : 'custom-light';
-                                          
                                           monaco.editor.defineTheme('custom-dark', {
                                             base: 'vs-dark',
                                             inherit: true,
@@ -1377,10 +1456,10 @@ export default function CodeEditor({ params }) {
                                               'editor.background': '#0a0a0a',
                                               'editor.lineHighlightBackground': '#000000',
                                               'editorLineNumber.foreground': '#404040',
+                                              'editor.scrollable.background': '#0a0a0a',
                                             },
                                             path: 'custom-dark-theme'
                                           });
-
                                           monaco.editor.defineTheme('custom-light', {
                                             base: 'vs',
                                             inherit: true,
@@ -1389,92 +1468,109 @@ export default function CodeEditor({ params }) {
                                               'editor.background': '#ffffff',
                                               'editor.lineHighlightBackground': '#ffffff',
                                               'editorLineNumber.foreground': '#404040',
+                                              'editor.scrollable.background': '#ffffff',
                                             },
                                             path: 'custom-light-theme'
                                           });
-
                                           editor.updateOptions({ theme: editorTheme });
                                           editor.focus();
                                         }}
                                       />
                                     </div>
-                                  </div>
-                                )
-                              ))}
+                                  )
+                                ))}
 
-                              {/* Render empty tab */}
-                              {panel.currentContent.type === 'empty' && (
-                                <div 
-                                  className="absolute top-0 w-full transition-transform duration-200 ease-in-out"
-                                  style={{ 
-                                    transform: `translateX(${panel.tabs.some(t => t.type === 'empty') ? '0%' : '100%'})`,
-                                    pointerEvents: panel.tabs.some(t => t.type === 'empty') ? 'auto' : 'none'
-                                  }}
-                                >
-                                  <EmptyTab 
-                                    files={files}
-                                    folderContents={folderContents}
-                                    loadingFolders={loadingFolders}
-                                    handleFileClick={handleFileClick}
-                                    owner={owner}
-                                    repo={repo}
-                                    fetchDirectory={fetchDirectory}
-                                    handleOpenUtilityTabs={handleOpenUtilityTabs}
-                                  />
-                                </div>
-                              )}
-                              {panel.currentContent.type === 'settings' && (
-                                <div 
-                                  className="absolute top-0 w-full transition-transform duration-200 ease-in-out overflow-auto"
-                                  style={{ 
-                                    transform: `translateX(${panel.tabs.some(t => t.type === 'settings') ? '0%' : '100%'})`,
-                                    pointerEvents: panel.tabs.some(t => t.type === 'settings') ? 'auto' : 'none'
-                                  }}
-                                >
-                                  <SettingsPage />
-                                </div>
-                              )}
+                                {/* Render empty tab */}
+                                {panel.tabs.map(tab => (
+                                  tab.type === 'empty' && (
+                                    <div 
+                                      key={tab.path}
+                                      className="absolute top-0 w-full transition-transform duration-200 ease-in-out"
+                                      style={{ 
+                                        transform: `translateX(${panel.activeTab === tab.path ? '0%' : '100%'})`,
+                                        pointerEvents: panel.activeTab === tab.path ? 'auto' : 'none'
+                                      }}
+                                    >
+                                      <EmptyTab 
+                                        files={files}
+                                        folderContents={folderContents}
+                                        loadingFolders={loadingFolders}
+                                        handleFileClick={handleFileClick}
+                                        owner={owner}
+                                        repo={repo}
+                                        fetchDirectory={fetchDirectory}
+                                        handleOpenUtilityTabs={handleOpenUtilityTabs}
+                                        handleOpenPreviewTab={() => handleRunClick(false)}
+                                      />
+                                    </div>
+                                  )
+                                ))}
 
-                              {/* Render preview tabs */}
-                              {panel.currentContent.type === 'preview' && (
-                                <div 
-                                    className="absolute top-0 w-full h-full transition-transform duration-200 ease-in-out"
-                                    style={{ 
-                                        transform: `translateX(${panel.tabs.some(t => t.type === 'preview') ? '0%' : '100%'})`,
-                                        pointerEvents: panel.tabs.some(t => t.type === 'preview') ? 'auto' : 'none'
-                                    }}
-                                >
-                                    <RunHtml src={panel.tabs.find(t => t.type === 'preview')?.content.src} />
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </EditorPanel>
-                    </ResizablePanel>
-                    {index < panelGroups.length - 1 && <ResizableHandle withHandle/>}
-                </React.Fragment>
-                ))}
+                                {/* Render Settings tab (Utility Tab) */}
+                                {panel.tabs.map(tab => (
+                                  tab.type === 'settings' && (
+                                    <div 
+                                      key={tab.path}
+                                      className="absolute top-0 w-full h-full transition-transform duration-200 ease-in-out overflow-auto"
+                                      style={{ 
+                                        transform: `translateX(${panel.activeTab === tab.path ? '0%' : '100%'})`,
+                                        pointerEvents: panel.activeTab === tab.path ? 'auto' : 'none'
+                                      }}
+                                    >
+                                      <SettingsPage />
+                                    </div>
+                                  )
+                                ))}
 
-                <EditorShortcuts handleOpenUtilityTabs={handleOpenUtilityTabs} />
-                <div 
-                    className='fixed bottom-2 left-2 cursor-pointer hover:bg-accent rounded-md p-1 z-[9999]'
-                        onClick={toggleSidebar}
-                    >
-                        <TooltipProvider delayDuration={100} skipDelayDuration={100}>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                  {sidebarOpen ? <PiRectangle size={24}/> : <PiSidebarFill size={24}/>}
-                                </TooltipTrigger>
-                            <TooltipContent>Toggle sidebar <span className="text-[10px] text-muted-foreground">⌘B</span></TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                </div>
-              </ResizablePanelGroup>
-            </ResizablePanel>
-            
-        </ResizablePanelGroup>
-    </SidebarProvider>
-    </ClerkProvider>
-  );
+                                {/* Render Preview tab (Utility Tab) */}
+                                {panel.tabs.map(tab => (
+                                  tab.type === 'preview' && (
+                                    <div 
+                                      key={tab.path}
+                                      className="absolute top-0 w-full h-full transition-transform duration-200 ease-in-out"
+                                      style={{ 
+                                        transform: `translateX(${panel.activeTab === tab.path ? '0%' : '100%'})`,
+                                        pointerEvents: panel.activeTab === tab.path ? 'auto' : 'none'
+                                      }}
+                                    >
+                                      <RunHtml src={tab.content.src} />
+                                    </div>
+                                  )
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </EditorPanel>
+                      </ResizablePanel>
+                      {index < panelGroups.length - 1 && <ResizableHandle withHandle/>}
+                  </React.Fragment>
+                  ))}
+
+                  <EditorShortcuts handleOpenUtilityTabs={handleOpenUtilityTabs} />
+                  <div 
+                      className='fixed bottom-2 left-2 cursor-pointer hover:bg-accent rounded-md p-1 z-[9999]'
+                          onClick={toggleSidebar}
+                      >
+                          <TooltipProvider delayDuration={100} skipDelayDuration={100}>
+                              <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    {sidebarOpen ? <PiRectangle size={24}/> : <PiSidebarFill size={24}/>}
+                                  </TooltipTrigger>
+                              <TooltipContent>Toggle sidebar <span className="text-[10px] text-muted-foreground">⌘B</span></TooltipContent>
+                          </Tooltip>
+                      </TooltipProvider>
+                  </div>
+                </ResizablePanelGroup>
+              </ResizablePanel>
+              
+          </ResizablePanelGroup>
+      </SidebarProvider>
+      </ClerkProvider>
+    );
+  }
+  
+  // ----------------------------------------------------------------
+  // FINAL RENDER: All hooks have been called, then render the computed content.
+  // ----------------------------------------------------------------
+  return <div className="editor-container">{content}</div>;
 }

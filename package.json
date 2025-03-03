@@ -1,6 +1,6 @@
 {
   "name": "reforkit",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "stage": "beta",
   "private": true,
   "scripts": {
@@ -41,7 +41,7 @@
     "monaco-editor-webpack-plugin": "^7.1.0",
     "next": "15.0.1",
     "next-remove-imports": "^1.0.12",
-    "next-themes": "^0.3.0",
+    "next-themes": "^0.4.4",
     "next-transpile-modules": "^10.0.1",
     "octokit": "^4.0.2",
     "prismjs": "^1.29.0",
@@ -52,6 +52,7 @@
     "react-simple-code-editor": "^0.14.1",
     "rehype-prism-plus": "^2.0.0",
     "rehype-rewrite": "^4.0.2",
+    "sonner": "^2.0.1",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
     "use-debounce": "^10.0.4"

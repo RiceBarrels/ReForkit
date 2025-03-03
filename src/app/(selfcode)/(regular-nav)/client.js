@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { ArrowRight, Code2, Zap, Globe, Users, Check, Code, Brain, Sparkles, Share2, Lock, Github, GitBranch, X, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
-
+import Image from "next/image"
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted">
@@ -19,18 +19,61 @@ export default function HomePage() {
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.2 }}
         >
-          <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-primary to-blue-600 text-transparent bg-clip-text">
-            Code. Create. Share.
-          </h1>
-          <p className="text-xl md:text-2xl text-muted-foreground mb-4">
+          <div className="flex justify-center items-end mb-6 bg-background">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.5 }}
+            >
+              <Image src="/Logo.svg" alt="Reforkit Logo" className="w-16 h-16 mb-0.5" width={100} height={100} />
+            </motion.div>
+            <motion.div
+              initial={{ x: -20, opacity: 0, rotate: -10 }}
+              animate={{ x: 0, opacity: 1, rotate: 0 }}
+              transition={{ delay: 0.3, type: "spring", stiffness: 100 }}
+              className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-primary text-[#6168e5] text-transparent bg-clip-text"
+            >
+              eForkit
+            </motion.div>
+          </div>
+          
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+          >
+            
+            {["Code.", "Create.", "Share."].map((word, index) => (
+              <motion.h1
+                key={index}
+                initial={{ y: 20, opacity: 0, rotate: 10 }}
+                animate={{ y: 0, opacity: 1, rotate: 0 }}
+                transition={{ delay: 0.6 + index * 0.2 }}
+                className="text-4xl md:text-5xl font-bold inline-block mr-3 bg-gradient-to-r from-primary to-[#6168e5] text-transparent bg-clip-text mb-3"
+              >
+                {word}
+              </motion.h1>
+            ))}
+          </motion.div>
+          
+          <motion.p 
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 1.2, duration: 0.5 }}
+            className="text-xl md:text-2xl text-muted-foreground mb-4"
+          >
             A powerful online code editor for HTML, CSS, and JavaScript
-          </p>
-          <div className="flex items-center justify-center gap-2 mb-8">
+          </motion.p>
+          <motion.div 
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 1.2, duration: 0.5 }}
+          className="flex items-center justify-center gap-2 mb-8">
             <Badge variant="outline" className="py-1">
               <Github className="w-4 h-4 mr-1" />
               Powered by GitHub
             </Badge>
-          </div>
+          </motion.div>
         </motion.div>
 
         <motion.div

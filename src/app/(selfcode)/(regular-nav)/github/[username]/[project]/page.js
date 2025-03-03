@@ -468,12 +468,7 @@ export default function GithubProjectPage({ params }) {
                         {isForking ? 'Forking...' : 'Fork'} {isForking ? <Loader2 className="w-4 h-4 animate-spin" /> : <BiGitRepoForked className="w-4 h-4" />}
                     </Button>
                     <Button>
-                        <Link 
-                            href={`https://github.com/${resolvedParams.username}/${resolvedParams.project}/archive/refs/heads/${Branch}.zip`}
-                            className="flex items-center gap-2"
-                        >
-                            Download ZIP <Download className="w-4 h-4" />
-                        </Link>
+                        Download ZIP <Download className="w-4 h-4" />
                     </Button>
                 </div>
             </div>

@@ -9,6 +9,7 @@ export default function Settings() {
 
     const menuItems = [
         { id: "User", label: "User" },
+        { id: "Editor", label: "Editor" },
         { id: "Appearance", label: "Appearance" },
         { id: "Advanced", label: "Advanced" },
         { id: "Beta", label: "Beta" },
@@ -71,6 +72,7 @@ export default function Settings() {
                             transition={{ duration: 0.1 }}
                         >
                             {selected === "User" && <UserSettings />}
+                            {selected === "Editor" && <EditorSettings />}
                             {selected === "Appearance" && <AppearanceSettings />}
                             {selected === "Advanced" && <AdvancedSettings />}
                             {selected === "Beta" && <BetaSettings />}
