@@ -485,27 +485,77 @@ export async function downloadZIP(owner, repo, branch, path = '') {
     const tokens = await getGitHubTokens(userId);
     const githubToken = tokens.data[0]?.token;
 
-    const octokit = githubToken ? new Octokit({ auth: githubToken }) : new Octokit();
+    const octokit = githubToken
+      ? new Octokit({ auth: githubToken })
+      : new Octokit();
 
-    // If path is provided, use the path-specific format for the reference
-    const ref = path != '' ? `${branch}:${path}` : branch;
+    // If a specific path is provided, adjust the reference accordingly.
+    const ref = path !== '' ? `${branch}:${path}` : branch;
 
+    // Remove the unsupported Accept header or change its value.
+    // Previously, we used: Accept: 'application/zip'
+    // Now we set it to a GitHub-supported value.
     const response = await octokit.request('GET /repos/{owner}/{repo}/zipball/{ref}', {
       owner,
       repo,
-      ref: ref
+      ref,
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
     });
 
+    // GitHub generally responds with a redirect URL.
     return {
       success: true,
-      message: 'ZIP downloaded successfully',
-      response: response.data
+      message: 'ZIP URL obtained successfully',
+      downloadUrl: response.url  // Use this URL to trigger the download client-side.
     };
   } catch (error) {
     console.error('GitHub API Error:', error);
     return {
       success: false,
       message: error.message || 'Failed to download ZIP'
+    };
+  }
+}
+
+export async function rePathFile(owner, repo, path, newPath) {
+  try {
+    const session = await auth();
+    const { userId } = session;
+    const tokens = await getGitHubTokens(userId);
+    const githubToken = tokens.data[0]?.token;
+
+    if (!githubToken) {
+      return {
+        success: false,
+        message: 'No valid GitHub token found'
+      };
+    }
+
+    const octokit = new Octokit({ auth: githubToken });
+
+    const response = await octokit.request('POST /repos/{owner}/{repo}/contents/{path}', {
+      owner,
+      repo,
+      path,
+      new_name: newPath,
+      headers: {
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
+
+    return {
+      success: true,
+      message: 'File renamed successfully',
+      response: response.data
+    };
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return {
+      success: false,
+      message: error.message || 'Failed to rename file'
     };
   }
 }

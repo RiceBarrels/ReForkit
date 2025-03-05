@@ -22,7 +22,7 @@ import { motion } from "framer-motion"
 import Editor from 'react-simple-code-editor';
 import { highlight, languages } from 'prismjs';
 import Prism from 'prismjs';
-
+import { toast } from "sonner";
 // Base languages - order matters!
 import 'prismjs/components/prism-core';
 import 'prismjs/components/prism-clike';
@@ -51,7 +51,7 @@ import 'prismjs/components/prism-go';
 
 // Theme
 import { Button } from "@/components/ui/button";
-import { getGitHubContents, getBranches, getDefaultBranch, forkRepository } from "@/app/actions/github";
+import { getGitHubContents, getBranches, getDefaultBranch, forkRepository, downloadZIP } from "@/app/actions/github";
 import { Combobox } from "@/components/ui/comboBox";
 
 import { useUser } from "@clerk/nextjs";
@@ -467,7 +467,17 @@ export default function GithubProjectPage({ params }) {
                     >
                         {isForking ? 'Forking...' : 'Fork'} {isForking ? <Loader2 className="w-4 h-4 animate-spin" /> : <BiGitRepoForked className="w-4 h-4" />}
                     </Button>
-                    <Button>
+                    <Button 
+                        onClick={async () => {
+                            const result = await downloadZIP(resolvedParams.username, resolvedParams.project, Branch);
+                            if (result.success && result.downloadUrl) {
+                            // Open the returned URL to trigger the download.
+                            window.open(result.downloadUrl, '_blank');
+                            } else {
+                                toast.error(result.message);
+                            }
+                        }}
+                    >
                         Download ZIP <Download className="w-4 h-4" />
                     </Button>
                 </div>

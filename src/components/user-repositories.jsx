@@ -182,7 +182,7 @@ export function UserRepositories() {
   // Show loading state while Clerk is initializing
   if (!isLoaded) {
     return (
-      <div className="flex justify-center items-center p-8">
+      <div className="flex justify-center items-center p-8 h-[calc(100vh-10rem)]">
         <Loader2 className="w-6 h-6 animate-spin" />
         <span className="ml-2 text-muted-foreground">Loading user...</span>
       </div>
@@ -209,8 +209,9 @@ export function UserRepositories() {
   // Show loading state while fetching repositories
   if (loading) {
     return (
-      <div className="p-4 flex justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+      <div className="flex justify-center items-center p-8 h-[calc(100vh-10rem)]">
+        <Loader2 className="w-6 h-6 animate-spin" />
+        <span className="ml-2 text-muted-foreground">Loading Repositories...</span>
       </div>
     );
   }

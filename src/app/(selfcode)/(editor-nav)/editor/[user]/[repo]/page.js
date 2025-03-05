@@ -50,14 +50,14 @@ import RunHtml from './runHtml';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { updateFile } from '@/app/actions/github';
+import { updateFile, downloadZIP } from '@/app/actions/github';
 import { Combobox } from '@/components/ui/comboBox';
 import { motion } from 'framer-motion';
 import { Editor } from '@monaco-editor/react';
 import { useTheme } from "next-themes";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { getFileIcon } from '@/components/editor/GetIcon';
-
+import { toast } from "sonner";
 function EditorPanel({ panel, children }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `panel-${panel.id}`,
@@ -991,7 +991,7 @@ export default function CodeEditor({ params }) {
   if (!isLoaded) {
     // Loading state until auth is initialized
     content = (
-      <div className="flex justify-center items-center w-screen h-screen">
+      <div className="flex justify-center items-center w-screen h-screen" onContextMenu={(e) => e.preventDefault()}>
         <Loader2 className="w-4 h-4 animate-spin"/>
       </div>
     );
@@ -1002,7 +1002,7 @@ export default function CodeEditor({ params }) {
   } else if (sidebarLoading) {
     // Sidebar still loading
     content = (
-      <div className="flex justify-center items-center w-screen h-screen">
+      <div className="flex justify-center items-center w-screen h-screen" onContextMenu={(e) => e.preventDefault()}>
         <Loader2 className="w-4 h-4 animate-spin"/>
       </div>
     );
@@ -1014,7 +1014,7 @@ export default function CodeEditor({ params }) {
   ) {
     // Render the settings configuration UI
     content = (
-      <div className="flex justify-center items-center w-screen h-screen">
+      <div className="flex justify-center items-center w-screen h-screen" onContextMenu={(e) => e.preventDefault()}>
         <div className="text-center max-w-md w-full">
           <Button variant="ghost" onClick={() => router.push(`/editor`)}>
             <ArrowLeft size={16}/> <span>Back</span>
@@ -1090,10 +1090,10 @@ export default function CodeEditor({ params }) {
     // MAIN CONTENT: Render your editor, sidebar, tabs, etc.
     content = (
       <ClerkProvider>
-        <SidebarProvider className="h-screen flex">
+        <SidebarProvider className="h-screen flex" onContextMenu={(e) => e.preventDefault()}>
           <ResizablePanelGroup 
               direction="horizontal" 
-              className="min-h-screen rounded-lg"
+              className="min-h-screen rounded-lg w-full"
           >
               <ResizablePanel 
                   ref={panelRef}
@@ -1106,7 +1106,7 @@ export default function CodeEditor({ params }) {
                       <TooltipProvider delayDuration={100} skipDelayDuration={100}>
                           <SidebarContent className="h-full">
                               <SidebarGroup className="h-full">
-                                  <SidebarGroupLabel>Reforkit (Closed Beta)</SidebarGroupLabel>
+                                  <SidebarGroupLabel>Reforkit (Beta)</SidebarGroupLabel>
                                   <Separator className="my-2"/>
                                   <SidebarGroupContent className="h-full">
                                     <TooltipProvider delayDuration={100} skipDelayDuration={100}>
@@ -1137,7 +1137,23 @@ export default function CodeEditor({ params }) {
                                         </Tooltip>
                                         <Tooltip>
                                           <TooltipTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="w-8 h-8">
+                                            <Button 
+                                              onClick={async () => {
+                                                const result = await downloadZIP(owner, repo, config.autoSaveBranch);
+                                                if (result.success && result.downloadUrl) {
+                                                  // Open the returned URL to trigger the download.
+                                                  window.open(result.downloadUrl, '_blank');
+                                                  toast.success(<div>
+                                                    <p>Downloading zip...</p>
+                                                    <span className="text-xs text-muted-foreground">if you don't see the download, <Link href={result.downloadUrl} target="_blank">Please Click Here</Link></span>
+                                                  </div>);
+                                                } else {
+                                                  // Handle the error accordingly (e.g., show a notification)
+                                                  toast.error(result.message);
+                                                }
+                                              }} 
+                                              variant="ghost" size="icon" className="w-8 h-8"
+                                            >
                                               <FileArchive size={16}/>
                                             </Button>
                                           </TooltipTrigger>
@@ -1230,7 +1246,7 @@ export default function CodeEditor({ params }) {
                 {/* Editor panels */}
           <ResizablePanelGroup 
                   direction="horizontal" 
-                  className="flex flex-1 rounded-lg"
+                  className="flex flex-1 rounded-lg w-full"
               >
                   {panelGroups.map((panel, index) => (
                     <React.Fragment key={panel.id}>
@@ -1289,6 +1305,7 @@ export default function CodeEditor({ params }) {
                           }
                         }}
                         minSize={24}
+                        defaultSize={50}
                       >
                         <EditorPanel panel={panel}>
                           {/* Add tabs */}
@@ -1411,7 +1428,7 @@ export default function CodeEditor({ params }) {
                                         overflow: panel.activeTab === tab.path ? 'auto' : 'hidden'
                                       }}
                                     >
-                                      <Editor
+                                      <Editor 
                                         height="100%"
                                         language={getLanguageFromFileName(tab.path)}
                                         value={tab.content}
@@ -1572,5 +1589,5 @@ export default function CodeEditor({ params }) {
   // ----------------------------------------------------------------
   // FINAL RENDER: All hooks have been called, then render the computed content.
   // ----------------------------------------------------------------
-  return <div className="editor-container">{content}</div>;
+  return <div className="editor-container w-full">{content}</div>;
 }

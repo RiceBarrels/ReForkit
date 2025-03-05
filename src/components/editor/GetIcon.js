@@ -89,6 +89,9 @@ export const getFileIcon = (name) => {
       case 'woff2':
       case 'eot':
         return <BiFontFamily color="#ba2d2d" size={16}/>;
+      //reforkit files
+      case 'reforkitsettings':
+        return <img src="/Logo.svg" width={16} height={16} alt="Reforkit" />;
       // reforkit utility tabs
       case 'reforkitnewtab':
         return <Plus size={16}/>;

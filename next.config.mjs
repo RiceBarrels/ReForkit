@@ -47,7 +47,7 @@ const configWithMonaco = withTM({
     if (!isServer) {
       config.plugins.push(
         new MonacoWebpackPlugin({
-          languages: ["javascript", "typescript", "json", "html", "css"],
+          languages: ["javascript", "typescript", "json", "html", "css", "python", "java", "c", "c++", "c#", "go", "rust", "php", "ruby", "swift", "kotlin", "scala", "haskell", "erlang", "elixir", "dart", "sass", "scss"],
           filename: "static/chunks/[name].worker.[hash].js",
         })
       );

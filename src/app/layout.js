@@ -24,12 +24,12 @@ export default function RootLayout({ children }) {
         <head>
           <meta charSet="UTF-8" />
           <Script
-            async
+            strategy="afterInteractive"
             src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3107009868155466"
             crossOrigin="anonymous"
           />
         </head>
-        <body className={`antialiased flex`}>
+        <body>
           <ThemeProvider
             attribute="class"
             defaultTheme="dark"

@@ -18,7 +18,7 @@ export default function EditorLayout({ children }) {
                   <TooltipTrigger asChild>
                     <SidebarTrigger />
                   </TooltipTrigger>
-                  <TooltipContent>Editor Sidebar <span className="text-xs text-muted-foreground">⌘⇧B</span></TooltipContent>
+                  <TooltipContent>Sidebar <span className="text-xs text-muted-foreground">⌘⇧B</span></TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>

@@ -98,15 +98,24 @@ export default function Page({ searchParams }) {
                     className="relative"  // Added relative positioning
                 >
                     <div className="text-sm text-muted-foreground mb-2">
-                        <small>Press ⌘S to search</small>
+                        <small>Press ⌘S to Focus</small>
                     </div>
                     <Input 
+                        // auto focus on input
+                        autoFocus
                         id="search-input"
                         defaultValue={params.query}
                         onChange={(e) => handleSearch(e.target.value)}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                                 handleSearch(e.target.value, true);
+                            }
+                            if (e.key === 's' && (e.metaKey || e.ctrlKey)) {
+                                e.preventDefault();
+                                const input = document.getElementById('search-input');
+                                if (input) {
+                                    input.focus();
+                                }
                             }
                         }}
                         onFocus={() => {

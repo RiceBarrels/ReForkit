@@ -1,10 +1,19 @@
 "use client"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Code2, Zap, Globe, Users, Check, Code, Brain, Sparkles, Share2, Lock, Github, GitBranch, X, AlertCircle } from "lucide-react"
+import { ArrowRight, Code2, Zap, Globe, Users, Check, Code, Brain, Sparkles, Share2, Lock, Github, GitBranch, X, AlertCircle, Download } from "lucide-react"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import Image from "next/image"
+import { FaGithub } from "react-icons/fa"
+import dynamic from "next/dynamic"
+
+// Dynamically import CodePreview (it won't be server-side rendered)
+const CodePreview = dynamic(() => import('@/components/CodePreview'), {
+  ssr: false,
+  loading: () => <div className="h-[586px]"></div>,
+});
+
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted">
@@ -25,13 +34,20 @@ export default function HomePage() {
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.5 }}
             >
-              <Image src="/Logo.svg" alt="Reforkit Logo" className="w-16 h-16 mb-0.5" width={100} height={100} />
+              <Image 
+                priority
+                src="/Logo.svg" 
+                alt="Reforkit Logo" 
+                className="w-16 h-16 mb-0.5" 
+                width={64} 
+                height={64} 
+              />
             </motion.div>
             <motion.div
               initial={{ x: -20, opacity: 0, rotate: -10 }}
               animate={{ x: 0, opacity: 1, rotate: 0 }}
               transition={{ delay: 0.3, type: "spring", stiffness: 100 }}
-              className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-primary text-[#6168e5] text-transparent bg-clip-text"
+              className="text-4xl md:text-6xl font-bold text-[#6168e5]"
             >
               eForkit
             </motion.div>
@@ -70,7 +86,7 @@ export default function HomePage() {
           transition={{ delay: 1.2, duration: 0.5 }}
           className="flex items-center justify-center gap-2 mb-8">
             <Badge variant="outline" className="py-1">
-              <Github className="w-4 h-4 mr-1" />
+              <FaGithub className="w-4 h-4 mr-1" />
               Powered by GitHub
             </Badge>
           </motion.div>
@@ -91,35 +107,16 @@ export default function HomePage() {
             View Examples
           </Button>
         </motion.div>
+      </motion.div>
 
-        {/* Code Preview */}
-        <motion.div
-          initial={{ y: 40, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.6 }}
-          className="relative mx-auto max-w-3xl"
-        >
-          <div className="rounded-lg border bg-card p-4 shadow-lg">
-            <div className="flex gap-2 mb-3">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            </div>
-            <pre className="text-left overflow-x-auto">
-              <code className="text-sm text-muted-foreground">
-                {`<!DOCTYPE html>
-<html>
-  <head>
-    <title>My Project</title>
-  </head>
-  <body>
-    <h1>Hello, Reforkit!</h1>
-  </body>
-</html>`}
-              </code>
-            </pre>
-          </div>
-        </motion.div>
+      {/* Code Preview: Lazy loaded below above‑fold hero content */}
+      <motion.div
+        initial={{ opacity: 0, y: 20, scale: 0.9 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ delay: 1.2, duration: 0.3 }}
+        className="container mx-auto py-12 px-24 pt-0"
+      >
+        <CodePreview />
       </motion.div>
 
       {/* Features Section */}
@@ -422,31 +419,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Add this section just before the Footer */}
-      <div className="py-8 bg-muted/30">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="max-w-3xl mx-auto text-center space-y-4"
-          >
-            <Badge variant="secondary" className="mb-2">Support Reforkit</Badge>
-            <p className="text-muted-foreground">
-              We use minimal ads to keep Reforkit free for everyone. If you&apos;d like to support our mission and get an ad-free experience, consider becoming a patron.
-            </p>
-            <div className="flex gap-4 justify-center">
-              <Link href="https://patreon.com/reforkit" target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" className="gap-2">
-                  Support on Patreon
-                  <ArrowRight size={16} />
-                </Button>
-              </Link>
-            </div>
-          </motion.div>
-        </div>
-      </div>
-
       {/* CTA Section */}
       <motion.div 
         initial={{ opacity: 0 }}
@@ -477,27 +449,24 @@ export default function HomePage() {
             </div>
             <div>
               <h4 className="font-semibold mb-4">Product</h4>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <li>Features</li>
-                <li>Examples</li>
-                <li>Documentation</li>
-                <li>API</li>
+              <div className="space-y-2 text-sm text-muted-foreground flex flex-col gap-2 transition-colors hover:[&>*]:text-primary hover:[&>*]:underline">
+                <Link href="/features">Features</Link>
               </div>
             </div>
             <div>
               <h4 className="font-semibold mb-4">Me</h4>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <li>About</li>
-                <li>Blog</li>
-                <li>Contact</li>
+              <div className="space-y-2 text-sm text-muted-foreground flex flex-col gap-2 transition-colors hover:[&>*]:text-primary hover:[&>*]:underline">
+                <Link href="/about">About</Link>
+                <Link href="/blog">Blog</Link>
+                <Link href="/contact">Contact</Link>
               </div>
             </div>
             <div>
               <h4 className="font-semibold mb-4">Legal</h4>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <li>Privacy Policy</li>
-                <li>Terms of Service</li>
-                <li>Cookie Policy</li>
+              <div className="space-y-2 text-sm text-muted-foreground flex flex-col gap-2 transition-colors hover:[&>*]:text-primary hover:[&>*]:underline">
+                <Link href="/privacy-policy">Privacy Policy</Link>
+                <Link href="/terms-of-service">Terms of Service</Link>
+                <Link href="/privacy-policy/#cookies">Cookie Policy</Link>
               </div>
             </div>
           </div>
@@ -534,11 +503,11 @@ const keyFeatures = [
     title: "Syntax Highlighting",
     description: "Support for multiple languages with beautiful syntax highlighting."
   },
-  {
-    icon: Brain,
-    title: "AI Assistance",
-    description: "Get intelligent code suggestions and error detection."
-  },
+  // {
+  //   icon: Brain,
+  //   title: "AI Assistance",
+  //   description: "Get intelligent code suggestions and error detection."
+  // },
   {
     icon: Sparkles,
     title: "Auto-formatting",
