@@ -151,7 +151,7 @@ export default function TermsOfService() {
           <h2 className="text-3xl font-bold mb-6 pb-2 border-b">11. Changes to Terms</h2>
           <p>
             We reserve the right to modify or replace these Terms at any time. We will provide notice of any material 
-            changes by posting the updated Terms on this page and updating the "Last updated" date.
+            changes by posting the updated Terms on this page and updating the &quot;Last updated&quot; date.
           </p>
           <p className="mt-4">
             Your continued use of Reforkit after any such changes constitutes your acceptance of the new Terms.
