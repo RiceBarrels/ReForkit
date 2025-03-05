@@ -118,7 +118,7 @@ export default function PrivacyPolicy() {
               <ul className="space-y-3">
                 <li className="flex items-start">
                   <span className="mr-2">•</span>
-                  <span>You can opt out of personalized advertising by visiting your browser's privacy settings</span>
+                  <span>You can opt out of personalized advertising by visiting your browser&apos;s privacy settings</span>
                 </li>
                 <li className="flex items-start">
                   <span className="mr-2">•</span>
@@ -126,7 +126,7 @@ export default function PrivacyPolicy() {
                 </li>
                 <li className="flex items-start">
                   <span className="mr-2">•</span>
-                  <span>You can opt out of some third-party vendors' uses of cookies for personalized advertising by visiting <Link href="https://www.aboutads.info/choices" className="text-primary hover:underline">www.aboutads.info/choices</Link></span>
+                  <span>You can opt out of some third-party vendors&apos; uses of cookies for personalized advertising by visiting <Link href="https://www.aboutads.info/choices" className="text-primary hover:underline">www.aboutads.info/choices</Link></span>
                 </li>
               </ul>
             </div>

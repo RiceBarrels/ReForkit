@@ -32,7 +32,7 @@ export default function Contact() {
           transition={{ delay: 0.1 }}
           className="text-xl text-muted-foreground max-w-3xl"
         >
-          Have questions or feedback? We'd love to hear from you.
+          Have questions or feedback? We&apos;d love to hear from you.
         </motion.p>
       </div>
 

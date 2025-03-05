@@ -1145,7 +1145,7 @@ export default function CodeEditor({ params }) {
                                                   window.open(result.downloadUrl, '_blank');
                                                   toast.success(<div>
                                                     <p>Downloading zip...</p>
-                                                    <span className="text-xs text-muted-foreground">if you don't see the download, <Link href={result.downloadUrl} target="_blank">Please Click Here</Link></span>
+                                                    <span className="text-xs text-muted-foreground">if you don&apos;t see the download, <Link href={result.downloadUrl} target="_blank">Please Click Here</Link></span>
                                                   </div>);
                                                 } else {
                                                   // Handle the error accordingly (e.g., show a notification)

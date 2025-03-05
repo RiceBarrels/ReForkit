@@ -131,7 +131,7 @@ export default function TermsOfService() {
         <section>
           <h2 className="text-3xl font-bold mb-6 pb-2 border-b">9. Disclaimer of Warranties</h2>
           <p>
-            REFORKIT IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
+            REFORKIT IS PROVIDED &ldquo;AS IS&rdquo; AND &ldquo;AS AVAILABLE&rdquo; WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
             INCLUDING, BUT NOT LIMITED TO, IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, 
             NON-INFRINGEMENT, OR COURSE OF PERFORMANCE.
           </p>

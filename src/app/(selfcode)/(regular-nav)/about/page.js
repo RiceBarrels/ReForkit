@@ -53,12 +53,12 @@ export default function About() {
               I believe in the power of the web and want to make it more accessible to everyone.
             </p>
             <p>
-              I've built Reforkit with a focus on simplicity, performance, and collaboration, leveraging the 
+              I&apos;ve built Reforkit with a focus on simplicity, performance, and collaboration, leveraging the 
               power of GitHub to provide robust version control and collaboration features that developers expect 
               in their workflow.
             </p>
             <p>
-              This is a solo project that I'm developing alongside my studies. It's just getting started, but I have big plans 
+              This is a solo project that I&apos;m developing alongside my studies. It&apos;s just getting started, but I have big plans 
               for the future of Reforkit and how it can improve web development for everyone.
             </p>
           </div>
@@ -116,21 +116,21 @@ export default function About() {
             <div className="flex-shrink-0">
               <div className="w-32 h-32 rounded-full overflow-hidden mx-auto">
                 <img
-                  src="https://github.com/identicons/muhengfan.png"
-                  alt="Muheng Fan"
+                  src="https://github.com/identicons/RiceBarrels.png"
+                  alt="MF"
                   className="w-full h-full object-cover"
                 />
               </div>
             </div>
             <div>
-              <h3 className="text-2xl font-bold mb-2">Muheng Fan</h3>
+              <h3 className="text-2xl font-bold mb-2">Muheng Fan <span className="text-muted-foreground text-sm"> aka RiceBarrels</span></h3>
               <p className="text-muted-foreground mb-4">Founder & Solo Developer | High School Student</p>
               <p className="text-muted-foreground mb-4">
-                Full-stack developer and high school student with a passion for creating tools that make web development more accessible.
-                Reforkit is my passion project aimed at simplifying the web development experience while I continue my education.
+                Full-stack developer and high school student with a passion for creating tools that make Coding more accessible.
+                Reforkit is my passion project aimed at simplifying the web coding experience while I continue my education.
               </p>
               <div className="flex gap-3">
-                <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary">
+                <a href="https://github.com/ricebarrels" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary">
                   <FaGithub className="h-5 w-5" />
                 </a>
                 <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary">
@@ -152,12 +152,12 @@ const values = [
   {
     icon: Code,
     title: "Simplicity",
-    description: "We believe that powerful tools don't have to be complicated. We strive to make web development accessible to everyone."
+    description: "We believe that powerful tools don&apos;t have to be complicated. We strive to make web development accessible to everyone."
   },
   {
     icon: Zap,
     title: "Performance",
-    description: "We're committed to building fast, responsive tools that help developers work efficiently without technical barriers."
+    description: "We&apos;re committed to building fast, responsive tools that help developers work efficiently without technical barriers."
   },
   {
     icon: Heart,
