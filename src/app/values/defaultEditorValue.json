@@ -1,4 +1,5 @@
 {
     "savingDelay": 5000,
-    "codeWarp": true
+    "codeWarp": true,
+    "debugMode": false
 }

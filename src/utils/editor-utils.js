@@ -80,7 +80,7 @@ const initializePrismLanguages = () => {
 // Initialize languages
 initializePrismLanguages();
 
-export const truncateFileName = (fileName, maxLength = 20) => {
+export const truncateFileName = (fileName, maxLength = 999) => {
   if (fileName.length <= maxLength) return fileName;
   const extension = fileName.split('.').pop();
   const nameWithoutExt = fileName.slice(0, -(extension.length + 1));

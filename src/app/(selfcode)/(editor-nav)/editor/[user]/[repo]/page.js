@@ -10,7 +10,7 @@ import { ClerkProvider } from '@clerk/nextjs';
 import EditorShortcuts from './editor-shortcuts';
 import { SidebarProvider } from "@/components/ui/sidebar";
 import Link from "next/link";
-import { Home, Loader2, Plus, X, Folder, Settings, Play, FilePlus, FolderPlus, FileUp, FileArchive, FolderGit, FolderGit2, ChevronRight, ArrowLeft, Info, ImageIcon, PlayCircle, Music} from "lucide-react";
+import { Home, Loader2, Plus, X, Folder, Settings, Play, FilePlus, FolderPlus, FileUp, FileArchive, FolderGit, FolderGit2, ChevronRight, ArrowLeft, Info, ImageIcon, PlayCircle, Music, Pencil, Trash, Download, Copy, CopySlash, FolderOpen, File, Link2, ExternalLink, Square, SquareSplitHorizontal} from "lucide-react";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { PiRectangle, PiSidebarFill } from "react-icons/pi";
 import {
@@ -33,7 +33,7 @@ import {
   SidebarGroupLabel,
   SidebarMenu
 } from "@/components/ui/sidebar";
-import { getGitHubContents, getDefaultBranch, getBranches, createBranch } from '@/app/actions/github';
+import { getGitHubContents, getDefaultBranch, getBranches, createBranch, renameFolder, createFile, createFolder, deleteFolder, rePathFile } from '@/app/actions/github';
 import { DndContext, DragOverlay} from "@dnd-kit/core";
 import {
   useSensor,
@@ -52,12 +52,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { updateFile, downloadZIP } from '@/app/actions/github';
 import { Combobox } from '@/components/ui/comboBox';
-import { motion } from 'framer-motion';
+import { motion, useAnimationFrame } from 'framer-motion';
 import { Editor } from '@monaco-editor/react';
 import { useTheme } from "next-themes";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { getFileIcon } from '@/components/editor/GetIcon';
 import { toast } from "sonner";
+import { isImageFile, isVideoFile, isAudioFile } from '@/components/editor/FileKind';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, ContextMenuSeparator } from '@/components/ui/context-menu';
+
 function EditorPanel({ panel, children }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `panel-${panel.id}`,
@@ -94,6 +97,7 @@ export default function CodeEditor({ params }) {
   
   const [files, setFiles] = useState([]);
   const [error, setError] = useState(null);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [code, setCode] = useState('');
   const [currentPath, setCurrentPath] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -103,6 +107,8 @@ export default function CodeEditor({ params }) {
   const [settingsFile, setSettingsFile] = useState({});
   const [loadingFolders, setLoadingFolders] = useState({});
   const [sidebarLoading, setSidebarLoading] = useState(true);
+  const [lastClickedFile, setLastClickedFile] = useState("");
+  const [runFuctionFile, setRunFuctionFile] = useState("");
   const [panelGroups, setPanelGroups] = useState([
     { id: 1, tabs: [], activeTab: null, fileLoading: false, currentContent: {} },
     { id: 2, tabs: [{
@@ -112,7 +118,7 @@ export default function CodeEditor({ params }) {
           "content": {
               "src": ""
           }
-      }], activeTab: null, fileLoading: false, currentContent: { "type": "preview", "src": ""} }
+      }], activeTab: "preview.reforkitpreviewtab", fileLoading: false, currentContent: { type: "preview"} }
   ]);
   const [activePanelId, setActivePanelId] = useState(1);
   const [hoveringPanelId, setHoveringPanelId] = useState(null);
@@ -121,31 +127,26 @@ export default function CodeEditor({ params }) {
     codeKind: settingsFile.codeKind,
     autoSaveBranch: 'reforkit-auto-save'
   });
-  const [isSaving, setIsSaving] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isCodeKindSet, setIsCodeKindSet] = useState(false);
   const [isAutoSaveBranchSet, setIsAutoSaveBranchSet] = useState(false);
   const { theme } = useTheme();
   const editorRef = useRef(null);
   const [pendingSaves, setPendingSaves] = useState([]);
-
+  const [activeId, setActiveId] = useState(null);
   const allowedCodeKinds = ['vanilla'];
 
-  // Update the isImageFile function to include more media types
-  const isImageFile = (filename) => {
-    const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico'];
-    return imageExtensions.some(ext => filename.toLowerCase().endsWith(ext));
-  };
+  const panelRef = useRef(null);
+  const [editingPath, setEditingPath] = useState(null);
+  const [editingNewFolderPath, setEditingNewFolderPath] = useState(null);
+  const [editingNewFilePath, setEditingNewFilePath] = useState(null);
+  const [openedFolders, setOpenedFolders] = useState([]);
 
-  // Add functions to check for video and audio files
-  const isVideoFile = (filename) => {
-    const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.wmv', '.flv', '.mkv'];
-    return videoExtensions.some(ext => filename.toLowerCase().endsWith(ext));
-  };
-
-  const isAudioFile = (filename) => {
-    const audioExtensions = ['.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a'];
-    return audioExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+  // Add this helper function (for example, near the top of your CodeEditor component)
+  const getParentPath = (path) => {
+    const parts = path.split('/');
+    parts.pop();
+    return parts.join('/');
   };
 
   // Fetch directory contents
@@ -188,6 +189,7 @@ export default function CodeEditor({ params }) {
     } finally {
       if (path === '') {
         setSidebarLoading(false);
+        setIsFirstLoad(false);
       } else {
         setLoadingFolders(prev => ({ ...prev, [path]: false }));
       }
@@ -316,9 +318,9 @@ export default function CodeEditor({ params }) {
         let content = '';
         if (typeof result.content === 'string') {
           content = result.content;
-        } else if (result.content.content) {
-          // GitHub API returns base64 encoded content
-          content = atob(result.content.content.replace(/\s/g, ''));
+        } else if (result.content.content !== undefined) {
+          // GitHub API returns base64 encoded content (which might be empty)
+          content = result.content.content ? atob(result.content.content.replace(/\s/g, '')) : '';
         } else {
           throw new Error('Unexpected content format');
         }
@@ -356,6 +358,43 @@ export default function CodeEditor({ params }) {
     }
   };
 
+  // Insert after your handleFileClick function (e.g., around line 150)
+  const handleEditSVG = async (tab) => {
+    try {
+      // Fetch the file contents as text
+      const result = await getGitHubContents(owner, repo, tab.path, settingsFile.autoSaveBranch, true);
+      if (!result.success) {
+        throw new Error(result.message || "Failed to fetch SVG content");
+      }
+      let content = '';
+      if (typeof result.content === 'string') {
+        content = result.content;
+      } else if (result.content.content) {
+        content = atob(result.content.content.replace(/\s/g, ''));
+      }
+      // Update the corresponding tab to become a code tab with the SVG content
+      setPanelGroups(prevGroups =>
+        prevGroups.map(panel => {
+          return {
+            ...panel,
+            tabs: panel.tabs.map(t => {
+              // When the tab path matches, update its type and content
+              if (t.path === tab.path) {
+                return { ...t, type: 'code', content: content };
+              }
+              return t;
+            }),
+            currentContent: panel.activeTab === tab.path ? { type: 'code', content: content } : panel.currentContent
+          };
+        })
+      );
+      setCode(content);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message);
+    }
+  };
+
   // Update handleCloseTab to properly handle empty tabs
   const handleCloseTab = (path, event) => {
     event.stopPropagation();
@@ -368,21 +407,6 @@ export default function CodeEditor({ params }) {
 
     // Retrieve the tab that is being closed.
     const closedTab = panelWithTab.tabs.find(tab => tab.path === path);
-
-    // If it's a code file, add its unsaved changes to the pendingSaves array.
-    if (closedTab && closedTab.type === 'code') {
-      setPendingSaves(prev => {
-        const index = prev.findIndex(item => item.path === path);
-        if (index !== -1) {
-          // Update the existing pending save with the latest content.
-          const updated = [...prev];
-          updated[index] = { path, content: closedTab.content };
-          return updated;
-        }
-        // Otherwise, add a new entry.
-        return [...prev, { path, content: closedTab.content }];
-      });
-    }
 
     // Close the tab by updating the panelGroups state.
     setPanelGroups(prev => prev.map(panel => {
@@ -449,8 +473,8 @@ export default function CodeEditor({ params }) {
                   ? {
                       ...tab,
                       content: { src: `/github/${owner}/${repo}/${settingsData.autoSaveBranch}/run/` }
-                    }
-                  : tab
+                  }
+                : tab
               ),
               currentContent: panel.currentContent.type === 'preview' 
                 ? { type: 'preview', src: `/github/${owner}/${repo}/${settingsData.autoSaveBranch}/run/` }
@@ -501,7 +525,7 @@ export default function CodeEditor({ params }) {
             setDefaultBranch(defaultBranchResult.default_branch);
             setPanelGroups(prev => prev.map(panel => ({
               ...panel,
-              activeTab: 'preview',
+              activeTab: 'preview.reforkitpreview',
               currentContent: {
                 type: 'preview',
                 src: `${owner}/${repo}/${settingsData.autoSaveBranch}/run/`
@@ -535,10 +559,19 @@ export default function CodeEditor({ params }) {
     initializeRepo();
   }, [isLoaded, owner, repo]);
 
+  // handle error
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+    }
+  }, [error]);
+
+  // Log panelGroups to the console
   useEffect(() => {
     console.log('panelGroups', panelGroups);
   }, [panelGroups]);
 
+  // Log currentPath to the console
   useEffect(() => {
     if (editorRef.current) {
       const editorTheme = theme === 'dark' ? 'custom-dark' : 'custom-light';
@@ -546,59 +579,303 @@ export default function CodeEditor({ params }) {
     }
   }, [theme]);
 
+  // Log config to the console
   useEffect(() => {
     setIsCodeKindSet(Boolean(config.codeKind));
     setIsAutoSaveBranchSet(config.autoSaveBranch.trim() !== '');
   }, [config.codeKind, config.autoSaveBranch]);
 
+  // Focus on the new file input
+  useEffect(() => {
+    if (!editingNewFilePath) return;
+    
+    // Focus immediately if folder contents exist or not loading
+    if (folderContents[editingNewFilePath] || !loadingFolders[editingNewFilePath]) {
+      const timer = setTimeout(() => {
+        const input = document.getElementById(`${editingNewFilePath}-new-file-input`);
+        if (input) {
+          input.focus();
+        }
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [editingNewFilePath, loadingFolders, folderContents]);
+
+  // Focus on the new folder input
+  useEffect(() => {
+    if (!editingNewFolderPath) return;
+    
+    // Focus immediately if folder contents exist or not loading
+    if (folderContents[editingNewFolderPath] || !loadingFolders[editingNewFolderPath]) {
+      const timer = setTimeout(() => {
+        const input = document.getElementById(`${editingNewFolderPath}-new-folder-input`);
+        if (input) {
+          input.focus();
+        }
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [editingNewFolderPath, loadingFolders, folderContents]);
+  
+
+  // Log renderFileTree to the console
   const renderFileTree = (items, currentPath = '') => {
-    return items.map((item) => {
-      const itemPath = currentPath ? `${currentPath}/${item.name}` : item.name;
-      
+    return (
+      <>
+        {items.map((item) => {
+          const itemPath = currentPath ? `${currentPath}/${item.name}` : item.name;
+          
       if (item.type === 'dir') {
         return (
           <AccordionItem key={itemPath} value={itemPath} className="border-b-0">
-            <AccordionTrigger 
-              className="py-2.5 mb-1 px-4 rounded-md border-b-0 hover:bg-accent hover:text-accent-foreground relative w-full"
-              onClick={() => {
-                if (!folderContents[itemPath] && !loadingFolders[itemPath]) {
-                  fetchDirectory(itemPath);
-                }
-              }}
-            >
-              <TooltipProvider key={itemPath} delayDuration={100}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="inline-flex items-center gap-2 w-full pr-6">
-                      <div className="relative w-4 h-4 flex-shrink-0">
-                        <motion.div
-                    initial={{ opacity: 0, scale: 0.5 }}
-                    animate={{ opacity: loadingFolders[itemPath] ? 1 : 0, scale: loadingFolders[itemPath] ? 1 : 0.5 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute inset-0"
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                  <AccordionTrigger 
+                    id={`${itemPath}-accordion-item`}
+                    className={"py-2.5 mb-1 px-4 rounded-md border-b-0 hover:bg-accent hover:text-accent-foreground border border-transparent relative w-full "+ (runFuctionFile === itemPath ? 'border-blue-500 hover:bg-background ' : '') + (lastClickedFile === itemPath ? 'bg-blue-500 bg-opacity-40 hover:bg-blue-500 hover:bg-opacity-40 ' : '') }
+                    onClick={(e) => {
+                      if (editingPath === itemPath) {
+                        e.preventDefault();
+                      }
+                      if (!folderContents[itemPath] && !loadingFolders[itemPath]) {
+                        fetchDirectory(itemPath);
+                      }
+                      setLastClickedFile(itemPath);
+                      setTimeout(() => {
+                        setRunFuctionFile(itemPath);
+                      }, 0);
+                      if (openedFolders.includes(itemPath)) {
+                        setOpenedFolders(prev => prev.filter(folder => folder !== itemPath));
+                      } else {
+                        setOpenedFolders(prev => [...prev, itemPath]);
+                      }
+                    }}
+                    onContextMenu={() => {
+                      setRunFuctionFile(itemPath);
+                    }}
                   >
-                    <Loader2 size={16} className="animate-spin"/>
-                  </motion.div>
-                  <motion.div
-                    initial={{ opacity: 1, scale: 1 }}
-                    animate={{ opacity: loadingFolders[itemPath] ? 0 : 1, scale: loadingFolders[itemPath] ? 0.5 : 1 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute inset-0"
-                  >
-                    <Folder size={16}/>
-                  </motion.div>
-                </div>
-                  <span className="truncate min-w-0">{item.name}</span>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                {item.name}
+                    <TooltipProvider key={itemPath} delayDuration={100}>
+                      <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="inline-flex items-center gap-2 w-full pr-6">
+                          <div className="relative w-4 h-4 flex-shrink-0">
+                            <motion.div
+                        initial={{ opacity: 0, scale: 0.5 }}
+                        animate={{ opacity: loadingFolders[itemPath] ? 1 : 0, scale: loadingFolders[itemPath] ? 1 : 0.5 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute inset-0"
+                      >
+                        <Loader2 size={16} className="animate-spin"/>
+                      </motion.div>
+                      <motion.div
+                        initial={{ opacity: 1, scale: 1 }}
+                        animate={{ opacity: loadingFolders[itemPath] ? 0 : 1, scale: loadingFolders[itemPath] ? 0.5 : 1 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute inset-0"
+                      >
+                        {/* check is loading */}
+                        {loadingFolders[itemPath] ? <Loader2 size={16} className="animate-spin"/> : <Folder size={16}/>}
+                      </motion.div>
+                    </div>
+                      <input
+                        id={`${itemPath}-name-input`}
+                        className={`truncate min-w-0 bg-transparent outline-none w-full rounded-sm pl-1 ${editingPath === itemPath ? 'outline outline-1 outline-blue-500' : 'cursor-pointer select-none'}`}
+                        defaultValue={item.name}
+                        readOnly={editingPath !== itemPath}
+                        onKeyDown={async (e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            setEditingPath(null);
+                            if (item.name !== e.target.value) {
+                              try {
+                                const response = await renameFolder(owner, repo, itemPath, `${itemPath.split('/').slice(0, itemPath.split('/').length-1).join('/')}/${e.target.value}`, settingsFile.autoSaveBranch);
+                                if (!response.success) {
+                                  document.getElementById(`${itemPath}-name-input`).value = item.name;
+                                } else {
+                                  toast.success('Folder renamed successfully');
+                                  // Refresh the folder content by fetching the parent directory
+                                  const parentPath = getParentPath(itemPath);
+                                  fetchDirectory(parentPath);
+                                }
+                              } catch (error) {
+                                toast.error('Failed to rename folder', {
+                                  description: error.message
+                                });
+                                document.getElementById(`${itemPath}-name-input`).value = item.name;
+                            }
+                          } else if (e.key === 'Escape') {
+                              e.preventDefault();
+                              setEditingPath(null);
+                              document.getElementById(`${itemPath}-name-input`).value = item.name;
+                            }
+                          } else if (e.key === '/') {
+                            e.preventDefault();
+                          }
+                        }}
+                        onBlur={async (e) => {
+                          setEditingPath(null);
+                          if (item.name !== e.target.value) {
+                            try {
+                              const response = await renameFolder(owner, repo, itemPath, e.target.value, settingsFile.autoSaveBranch);
+                              if (!response.success) {
+                                toast.error('Failed to rename folder');
+                                document.getElementById(`${itemPath}-name-input`).value = item.name;
+                              } else {
+                                toast.success('Folder renamed successfully');
+                                // Refresh the folder content by fetching the parent directory
+                                const parentPath = getParentPath(itemPath);
+                                fetchDirectory(parentPath);
+                              }
+                            } catch (error) {
+                              toast.error('Failed to rename folder');
+                              document.getElementById(`${itemPath}-name-input`).value = item.name;
+                            }
+                          }
+                        }}
+                        spellCheck={false}
+                      />
+                    </div>
+                  </TooltipTrigger>
+              <TooltipContent className="text-xs py-2">
+                <code className="">./{item.path}</code>
               </TooltipContent>
             </Tooltip>
             </TooltipProvider>
             </AccordionTrigger>
+            </ContextMenuTrigger>
+                <ContextMenuContent className="w-64">
+                  <ContextMenuItem className="flex items-center gap-2" onClick={() => {
+                    setEditingNewFilePath(itemPath);
+                    setCurrentPath(itemPath);
+                    const input = document.getElementById(`${editingNewFilePath}-new-file-input`);
+
+                    if (!openedFolders.includes(itemPath)) {
+                      document.getElementById(`${itemPath}-accordion-item`).click();
+                      setTimeout(() => {
+                        if (input) {
+                          input.focus();
+                          input.select();
+                        }
+                      }, 300);
+                    } else {
+                      setTimeout(() => {
+                        if (input) {
+                          input.focus();
+                          input.select();
+                        }
+                      }, 250);
+                    }
+                  }}>
+                    <FilePlus size={14}/>
+                    <span className="text-sm" >New File...</span>
+                  </ContextMenuItem>
+                  <ContextMenuItem className="flex items-center gap-2" onClick={() => {
+                    setEditingNewFolderPath(itemPath);
+                    setCurrentPath(itemPath);
+                    const input = document.getElementById(`${editingNewFolderPath}-new-folder-input`);
+
+                    if (!openedFolders.includes(itemPath)) {
+                      document.getElementById(`${itemPath}-accordion-item`).click();
+                      setTimeout(() => {
+                        if (input) {
+                          input.focus();
+                          input.select();
+                        }
+                      }, 300);
+                    } else {
+                      setTimeout(() => {
+                        if (input) {
+                          input.focus();
+                          input.select();
+                        }
+                      }, 250);
+                    }
+                  }}>
+                    <FolderPlus size={14}/>
+                    <span className="text-sm" >New Folder...</span>
+                  </ContextMenuItem>
+                  <ContextMenuSeparator className="my-1"/>
+                  <ContextMenuItem className="flex items-center gap-2" onClick={()=>{
+                    document.getElementById(`${itemPath}-accordion-item`).click();
+                  }}>
+                    {openedFolders.includes(itemPath) ? <FolderOpen size={14}/> : <Folder size={14}/>}
+                    <span className="text-sm" >{openedFolders.includes(itemPath) ? 'Fold' : 'Unfold'}</span>
+                  </ContextMenuItem>
+                  <ContextMenuSeparator className="my-1"/>
+                  <ContextMenuItem className="my-1 flex items-center gap-2" onClick={()=>{
+
+                  }}>
+                    <FileArchive size={14}/>
+                    <span className="text-sm">
+                      Download as Zip...
+                    </span>
+                  </ContextMenuItem>
+
+                  <ContextMenuItem className="my-1 flex items-center gap-2" onClick={()=>{
+                    window.open(`https://github.com/${owner}/${repo}/tree/${settingsFile.autoSaveBranch}/${itemPath}`, '_blank');
+                  }}>
+                    <FolderGit2 size={14}/>
+                    <span className="text-sm">
+                      View in GitHub
+                    </span>
+                  </ContextMenuItem>
+                  <ContextMenuSeparator className="my-1"/>
+
+                  <ContextMenuItem className="my-1 flex items-center gap-2" onClick={()=>{
+                    navigator.clipboard.writeText(itemPath);
+                    toast.success('Path copied to clipboard');
+                  }}>
+                    <Copy size={14}/>
+                    <span className="text-sm">
+                      Copy Path
+                    </span>
+                  </ContextMenuItem>
+                  <ContextMenuItem className="my-1 flex items-center gap-2" onClick={()=>{
+                    navigator.clipboard.writeText(itemPath);
+                    toast.success('Path copied to clipboard');
+                  }}>
+                    <CopySlash size={14}/>
+                    <span className="text-sm">
+                      Copy Relative Path <span className="text-xs text-muted-foreground">(current file)</span>
+                    </span>
+                  </ContextMenuItem>
+                  
+                  <ContextMenuSeparator className="my-1"/>
+                  <ContextMenuItem className="flex items-center gap-2" onClick={()=>{
+                    setEditingPath(itemPath);
+                    // Use setTimeout to ensure the state has been updated and the input is enabled
+                    setTimeout(() => {
+                      const input = document.getElementById(`${itemPath}-name-input`);
+                      if (input) {
+                        input.focus();
+                        input.select();
+                      }
+                    }, 0);
+                  }}>
+                    <Pencil size={14}/>
+                    <span className="text-sm">Rename</span>
+                  </ContextMenuItem>
+                  <ContextMenuItem 
+                  onClick={async ()=>{
+                    document.getElementById(`${itemPath}-accordion-item`).style.display = 'none';
+                    const deleteResult = await deleteFolder(owner, repo, itemPath, settingsFile.autoSaveBranch);
+                    if (deleteResult.success) {
+                      toast.success("Folder deleted successfully");
+                      const parentPath = getParentPath(itemPath);
+                      fetchDirectory(parentPath);
+                    } else {
+                      toast.error(`Failed to delete folder: ${deleteResult.message}`);
+                      document.getElementById(`${itemPath}-accordion-item`).style.display = 'block';
+                    }
+                  }}
+                  className="flex items-center gap-2 text-red-500">
+                    <Trash size={14}/>
+                    <span className="text-sm">Delete</span>
+                  </ContextMenuItem>
+                </ContextMenuContent>
+            </ContextMenu>
             <AccordionContent>
-              <div className="ml-6 pl-1 border-l-[1px]">
+              <div className="ml-6 pl-1 border-l-[1px] pb-0">
                 {folderContents[itemPath] && (
                   <div key={`content-${itemPath}`} className="space-y-1">
                     {renderFileTree(folderContents[itemPath], itemPath)}
@@ -608,34 +885,308 @@ export default function CodeEditor({ params }) {
             </AccordionContent>
           </AccordionItem>
         );
-      }
-      
+      } else if (item.type === 'file') {
       return (
-        <TooltipProvider key={itemPath} delayDuration={100}>
-          <Tooltip>
-            <TooltipTrigger asChild>
+        <ContextMenu>
+          <ContextMenuTrigger>
+            <TooltipProvider key={itemPath} delayDuration={100} asChild>
+              <Tooltip asChild>
+                <TooltipTrigger asChild>
+                  <Button
+                id={`${itemPath}-file-button`}
+                    variant="ghost"
+                className={"w-full justify-start gap-2 py-2 border border-transparent " + 
+                  (item.name.substring(0,1) === '.' ? 'opacity-60 ' : '') +
+                      (runFuctionFile === itemPath ? 'border-blue-500 hover:bg-background ' : '') +
+                  (lastClickedFile === itemPath ? 'bg-blue-500 bg-opacity-40 hover:bg-blue-500 hover:bg-opacity-40 ' : '')}
+                    onClick={() => {
+                      handleFileClick(item);
+                      setLastClickedFile(itemPath);
+                      setRunFuctionFile(itemPath);
+                    }}
+                onContextMenu={() => {
+                      setRunFuctionFile(itemPath);
+                    }}
+                  >
+                    {getFileIcon(item.name)}
+                    <input
+                      id={`${itemPath}-name-input`}
+                      className={`truncate min-w-0 bg-transparent outline-none w-full rounded-sm pl-1 ${editingPath === itemPath ? 'outline outline-1 outline-blue-500' : 'cursor-pointer select-none'}`}
+                      defaultValue={item.name}
+                      readOnly={editingPath !== itemPath}
+                      onKeyDown={async (e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          setEditingPath(null);
+                          if (item.name !== e.target.value) {
+                            try {
+                              const response = await rePathFile(owner, repo, settingsFile.autoSaveBranch, itemPath, `${itemPath.split('/').slice(0, itemPath.split('/').length-1).join('/')}/${e.target.value}`);
+                              if (!response.success) {
+                                toast.error('Failed to rename file');
+                                document.getElementById(`${itemPath}-name-input`).value = item.name;
+                                throw new Error('Failed to rename file');
+                              } else {
+                                toast.success('File renamed successfully');
+                                // Refresh the folder content by fetching the parent directory
+                                const parentPath = getParentPath(itemPath);
+                                fetchDirectory(parentPath);
+                              }
+                            } catch (error) {
+                              toast.error('Failed to rename file');
+                              document.getElementById(`${itemPath}-name-input`).value = item.name;
+                          }
+                        } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            
+                            setEditingPath(null);
+                            document.getElementById(`${itemPath}-name-input`).value = item.name;
+                          }
+                        } else if (e.key === '/') {
+                          e.preventDefault();
+                        }
+                      }}
+                      onBlur={async (e) => {
+                        setEditingPath(null);
+                        if (item.name !== e.target.value) {
+                          try {
+                            const newPath = `${itemPath.split('/').slice(0, itemPath.split('/').length-1).join('/')}/${e.target.value}`;
+                            const response = await rePathFile(owner, repo, settingsFile.autoSaveBranch, itemPath, newPath);
+                            if (!response.success) {
+                              document.getElementById(`${itemPath}-name-input`).value = item.name;
+                            } else {
+                              toast.success('File renamed successfully');
+                              // Refresh the folder content by fetching the parent directory
+                              const parentPath = getParentPath(itemPath);
+                              fetchDirectory(parentPath);
+                            }
+                          } catch (error) {
+                            toast.error('Failed to rename file', {
+                              description: error.message
+                            });
+                            document.getElementById(`${itemPath}-name-input`).value = item.name;
+                          }
+                        }
+                      }}
+                      spellCheck={false}
+                    />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="text-xs py-2">
+                  <code className="">./{item.path}</code>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </ContextMenuTrigger>
+
+          <ContextMenuContent className="w-64">
+          <ContextMenuItem 
+            className="flex items-center gap-2"
+            onClick={()=>{
+              handleFileClick(item);
+            }}
+          >
+            <ExternalLink size={14}/>
+            <span className="text-sm">Open in New Tab</span>
+            </ContextMenuItem>
+            <ContextMenuItem
+            className="flex items-center gap-2"
+            onClick={()=>{
+              
+            }}
+          >
+            <SquareSplitHorizontal size={14}/>
+            <span className="text-sm">Open in New Panel</span>
+          </ContextMenuItem>
+          <ContextMenuSeparator className="my-1"/>
+          <ContextMenuItem className="my-1 flex items-center gap-2" onClick={()=>{
+
+            }}
+          >
+            <FileArchive size={14}/>
+            <span className="text-sm">
+              Download as Zip...
+            </span>
+          </ContextMenuItem>
+
+          <ContextMenuItem className="my-1 flex items-center gap-2" onClick={()=>{
+            window.open(`https://github.com/${owner}/${repo}/tree/${settingsFile.autoSaveBranch}/${itemPath}`, '_blank');
+          }}>
+            <FolderGit2 size={14}/>
+            <span className="text-sm">
+              View in GitHub
+            </span>
+          </ContextMenuItem>
+          <ContextMenuSeparator className="my-1"/>
+
+          <ContextMenuItem className="my-1 flex items-center gap-2" onClick={()=>{
+            navigator.clipboard.writeText(itemPath);
+            toast.success('Path copied to clipboard');
+          }}>
+            <Copy size={14}/>
+            <span className="text-sm">
+              Copy Path
+            </span>
+          </ContextMenuItem>
+          <ContextMenuItem className="my-1 flex items-center gap-2" onClick={()=>{
+            navigator.clipboard.writeText(itemPath);
+            toast.success('Path copied to clipboard');
+          }}>
+            <CopySlash size={14}/>
+            <span className="text-sm">
+              Copy Relative Path <span className="text-xs text-muted-foreground">(current file)</span>
+            </span>
+          </ContextMenuItem>
+          <ContextMenuSeparator className="my-1"/>
+            <ContextMenuItem 
+              className="flex items-center gap-2"
+              onClick={()=>{
+                setEditingPath(itemPath);
+                setTimeout(() => {
+                  const input = document.getElementById(`${itemPath}-name-input`);
+                  if (input) {
+                    input.focus();
+                    input.select();
+                  }
+                }, 0);
+              }}
+            >
+              <Pencil size={14}/>
+              <span className="text-sm">Rename</span>
+            </ContextMenuItem>
+            <ContextMenuItem className="flex items-center gap-2 text-red-500">
+              <Trash size={14}/>
+              <span className="text-sm">Delete</span>
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+      )}})}
               <Button
                 variant="ghost"
-                className="w-full justify-start gap-2 py-2"
-                onClick={() => handleFileClick(item)}
-              >
-                {getFileIcon(item.name)}
-                <span className="truncate min-w-0">
-                  {truncateFileName(item.name)}
-                </span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {item.name}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    });
+                className={
+                  "w-full justify-start gap-2 py-2 border border-transparent " +
+          (editingNewFolderPath === currentPath ? " " : "hidden")
+        }
+        id={`${currentPath}-new-folder-button`}
+      >
+        <FolderPlus size={14}/>
+        <input
+          type="text"
+          placeholder="New Folder"
+          className="truncate w-full bg-transparent outline-blue-500 outline-1 pl-1 cursor-pointer"
+          id={`${currentPath}-new-folder-input`}
+          disabled={editingNewFolderPath !== currentPath}
+          onBlur={async (e) => {
+            setEditingNewFolderPath(null);
+            if (!e.target.value) return;
+            try {
+              const response = await createFolder(owner, repo, currentPath, e.target.value, settingsFile.autoSaveBranch);
+              if (!response.success) {
+                toast.error('Failed to create folder');
+                throw new Error('Failed to create folder');
+              } else {
+                toast.success('Folder created successfully');
+                fetchDirectory(currentPath);
+              }
+            } catch (error) {
+              toast.error('Failed to create folder');
+            }
+          }}
+          onFocus={(e) => {
+            e.target.value = '';
+          }}
+          onKeyDown={async (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (!e.target.value) {
+                setEditingNewFolderPath(null);
+                return;
+              }
+              try {
+                const response = await createFolder(owner, repo, currentPath, e.target.value, settingsFile.autoSaveBranch);
+                if (response.success) {
+                  toast.success('Folder created successfully');
+                  fetchDirectory(currentPath);
+                } else {
+                  toast.error('Failed to create folder');
+                }
+              } catch (error) {
+                toast.error('Failed to create folder');
+              }
+              setEditingNewFolderPath(null);
+            } else if (e.key === 'Escape') {
+              setEditingNewFolderPath(null);
+            } else if (e.key === '/') {
+              e.preventDefault();
+            }
+          }}
+        />
+      </Button>
+      <Button
+        variant="ghost"
+        className={
+          "w-full justify-start gap-2 py-2 border border-transparent " +
+          (editingNewFilePath === currentPath ? " " : "hidden")
+        }
+        id={`${currentPath}-new-file-button`}
+      >
+        <FilePlus size={14}/>
+        <input
+          type="text"
+          placeholder="New File"
+          className="truncate w-full bg-transparent outline-blue-500 outline-1 pl-1 cursor-pointer"
+          id={`${currentPath}-new-file-input`}
+          disabled={editingNewFilePath !== currentPath}
+          onBlur={async (e) => {
+            setEditingNewFilePath(null);
+            if (!e.target.value) return;
+            try {
+              const response = await createFile(owner, repo, currentPath, e.target.value, settingsFile.autoSaveBranch);
+              if (!response.success) {
+                toast.error('Failed to create file');
+                throw new Error('Failed to create file');
+              } else {
+                toast.success('File created successfully');
+                fetchDirectory(currentPath);
+              }
+            } catch (error) {
+              toast.error('Failed to create file');
+            }
+          }}
+          onFocus={(e) => {
+            e.target.value = '';
+          }}
+          onKeyDown={async (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (!e.target.value) {
+                setEditingNewFilePath(null);
+                return;
+              }
+              try {
+                const response = await createFile(owner, repo, currentPath, e.target.value, settingsFile.autoSaveBranch);
+                if (response.success) {
+                  toast.success('File created successfully');
+                  fetchDirectory(currentPath);
+                } else {
+                  toast.error('Failed to create file');
+                }
+              } catch (error) {
+                toast.error('Failed to create file');
+              }
+              setEditingNewFilePath(null);
+            } else if (e.key === 'Escape') {
+              setEditingNewFilePath(null);
+            } else if (e.key === '/') {
+              e.preventDefault();
+            }
+          }}
+        />
+      </Button>
+    </>
+  );
   };
 
-  const panelRef = useRef(null);
-
+  // Toggle sidebar
   const toggleSidebar = () => {
     if (panelRef.current) {
       if (sidebarOpen) {
@@ -657,18 +1208,6 @@ export default function CodeEditor({ params }) {
     }
   };
 
-  const handleShortcut = (event) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === 'b') {
-      event.preventDefault();
-      toggleSidebar();
-    }
-  };
-
-  useEffect(() => {
-    document.addEventListener('keydown', handleShortcut);
-    return () => document.removeEventListener('keydown', handleShortcut);
-  }, [handleShortcut]);
-
   // Add sensor configuration
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -679,16 +1218,17 @@ export default function CodeEditor({ params }) {
     useSensor(KeyboardSensor)
   );
 
-  const [activeId, setActiveId] = useState(null);
-
+  // Handle drag start
   const handleDragStart = (event) => {
     setActiveId(event.active.id);
   };
 
+  // Handle drag cancel
   const handleDragCancel = () => {
     setTimeout(()=>setActiveId(null),0);
   };
 
+  // Handle drag end
   const handleDragEnd = (event) => {
     setTimeout(() => setActiveId(null), 0);
     
@@ -813,6 +1353,7 @@ export default function CodeEditor({ params }) {
     }));
   };
 
+  // Handle open utility tabs
   const handleOpenUtilityTabs = (tabType) => {
     // Generate unique ID for the tab
     const tabId = `${tabType}-${Date.now()}.reforkitutilitytab`;
@@ -933,7 +1474,7 @@ export default function CodeEditor({ params }) {
     }));
   };
 
-
+  // Handle save settings
   const handleSaveSettings = async () => {
     setIsSavingSettings(true);
     const response = await updateFile(owner, repo, '.reforkitSettings', defaultBranch, JSON.stringify(config));
@@ -942,6 +1483,11 @@ export default function CodeEditor({ params }) {
       // reload the page
       window.location.reload();
     }
+  }
+
+  // debug mode 
+  const debugMode = ()=>{
+    
   }
 
   // ----------------------------------------------------------------
@@ -991,19 +1537,21 @@ export default function CodeEditor({ params }) {
   if (!isLoaded) {
     // Loading state until auth is initialized
     content = (
-      <div className="flex justify-center items-center w-screen h-screen" onContextMenu={(e) => e.preventDefault()}>
+      <div className="flex flex-col justify-center items-center w-screen h-screen" onContextMenu={(e) => e.preventDefault()}>
         <Loader2 className="w-4 h-4 animate-spin"/>
+        <small>Authenticating...</small>
       </div>
     );
   } else if (!userId) {
     // Redirect to login
-    router.push('/login');
+    router.push('/login?redirect_url=/editor/' + owner + '/' + repo);
     content = null;
-  } else if (sidebarLoading) {
+  } else if (sidebarLoading && isFirstLoad) {
     // Sidebar still loading
     content = (
-      <div className="flex justify-center items-center w-screen h-screen" onContextMenu={(e) => e.preventDefault()}>
+      <div className="flex flex-col justify-center items-center w-screen h-screen" onContextMenu={(e) => e.preventDefault()}>
         <Loader2 className="w-4 h-4 animate-spin"/>
+        <small>Fetching files...</small>
       </div>
     );
   } else if (
@@ -1105,8 +1653,8 @@ export default function CodeEditor({ params }) {
                   <Sidebar className="h-full w-full bg-background" collapsible="none">
                       <TooltipProvider delayDuration={100} skipDelayDuration={100}>
                           <SidebarContent className="h-full">
-                              <SidebarGroup className="h-full">
-                                  <SidebarGroupLabel>Reforkit (Beta)</SidebarGroupLabel>
+                              <SidebarGroup className="h-full p-0">
+                                  <SidebarGroupLabel id="reforkit-label">Reforkit (Beta)</SidebarGroupLabel>
                                   <Separator className="my-2"/>
                                   <SidebarGroupContent className="h-full">
                                     <TooltipProvider delayDuration={100} skipDelayDuration={100}>
@@ -1161,31 +1709,56 @@ export default function CodeEditor({ params }) {
                                         </Tooltip>
                                       </div>
                                     </TooltipProvider>
-                                      <SidebarMenu className="h-full">
-                                          <Accordion type="multiple" collapsible="true" defaultValue={["files"]} className="h-full">
-                                              <AccordionItem value="files" className="h-full border-b-0">
-                                                  <AccordionTrigger className="mx-2 py-2">
-                                                      <span className="inline-flex items-center gap-2">
-                                                          <FolderGit2 size={16}/> {resolvedParams.repo}
-                                                      </span>
+                                      <SidebarMenu className="flex-1 flex flex-col h-full">
+                                          <Accordion type="multiple" collapsible="true" defaultValue={["files"]} className="max-h-[50%] flex flex-col">
+                                              <AccordionItem value="files" className="border-b-0 flex-1 flex flex-col h-full w-full">
+                                                  <AccordionTrigger className={"py-2.5 px-4 rounded-md border-b-0 hover:bg-accent hover:text-accent-foreground relative w-full mx-1 border border-transparent " + (runFuctionFile === "" ? "border-blue-500 " : "") + (lastClickedFile === "" ? "bg-blue-500 bg-opacity-40 hover:bg-blue-500 hover:bg-opacity-40" : "")}>
+                                                    <div className="inline-flex items-center gap-2 w-full pr-6" onClick={() => {
+                                                      setRunFuctionFile("");
+                                                      setLastClickedFile("");
+                                                    }}>
+                                                      <FolderGit2 size={16} className="min-w-4"/> 
+                                                      <span className="text-sm font-bold text-left truncate min-w-0 flex-1">{resolvedParams.repo}</span>
+                                                    </div>
                                                   </AccordionTrigger>
-                                                  <AccordionContent className="mx-2 mt-2 h-[calc(100vh-8rem)] overflow-auto">
+                                                  <AccordionContent 
+                                                    parentClassName={"flex-1 mx-1 mt-2 overflow-auto border border-transparent rounded-md "}
+                                                  >
                                                       {sidebarLoading && !folderContents[currentPath] ? (
                                                           <div className="flex justify-center py-4">
                                                               <Loader2 className="w-4 h-4 animate-spin"/>
                                                           </div>
-                                                      ) : error ? (
-                                                          <div className="text-destructive text-sm py-2">
-                                                              {error}
-                                                          </div>
-                                                      ) : (
-                                                          <div className="space-y-1">
+                                                      ):(
+                                                          <div className="space-y-1 flex">
+                                                            <ContextMenu>
+                                                              <ContextMenuTrigger asChild>
+                                                                  <div 
+                                                                    className="min-w-6 min-h-full"
+                                                                onClick={() => {
+                                                                  setRunFuctionFile("");
+                                                                }}
+                                                                  onContextMenu={() => {
+                                                                    setRunFuctionFile("");
+                                                                  }}
+                                                                />
+                                                              </ContextMenuTrigger>
+                                                              <ContextMenuContent>
+                                                                <ContextMenuItem>
+                                                                  <FolderGit2 size={16}/>
+                                                                  <span>New Folder</span>
+                                                                </ContextMenuItem>
+                                                              </ContextMenuContent>
+                                                            </ContextMenu>
+                                                            <div className="w-[calc(100%-1.5rem)] border-l border-accent pl-1">
                                                               {renderFileTree(files)}
+                                                            </div>
                                                           </div>
                                                       )}
                                                   </AccordionContent>
                                               </AccordionItem>
                                           </Accordion>
+                                          <Separator className=""/>
+                                          <div className="flex-1">ads</div>
                                       </SidebarMenu>
                                   </SidebarGroupContent>
                               </SidebarGroup>
@@ -1256,9 +1829,10 @@ export default function CodeEditor({ params }) {
                         onMouseEnter={() => {
                           setHoveringPanelId(`panel-${panel.id}`);
                         }}
-                        onMouseLeave={() => setHoveringPanelId(null)}
+                        onMouseLeave={() => {
+                          setHoveringPanelId(null);
+                        }}
                         onMouseDown={() => {
-                          console.log('Setting active panel:', panel.id);
                           setActivePanelId(panel.id);
                         }}
                         onMouseUp={() => {
@@ -1387,27 +1961,42 @@ export default function CodeEditor({ params }) {
                                   (tab.type === 'image' || tab.type === 'video' || tab.type === 'audio') && (
                                     <div 
                                       key={tab.path}
-                                      className="flex flex-col h-full absolute top-0 w-full transition-transform duration-200 ease-in-out"
+                                      className="flex flex-col p-4 justify-center items-center h-full absolute top-0 w-full transition-transform duration-200 ease-in-out"
                                       style={{ 
                                         transform: `translateX(${panel.activeTab === tab.path ? '0%' : '100%'})`,
                                         pointerEvents: panel.activeTab === tab.path ? 'auto' : 'none'
                                       }}
                                     >
                                       {tab.type === 'image' && (
-                                        <img 
-                                          src={tab.content.url} 
-                                          alt={tab.path}
-                                          className="max-w-full h-auto object-contain"
-                                        />
+                                        <>
+                                          <img 
+                                            src={tab.content.url} 
+                                            alt={tab.path}
+                                            className="max-w-full max-h-full h-auto object-contain"
+                                          />
+                                          {tab.name.toLowerCase().endsWith('.svg') && (
+                                            <div className="absolute top-2 right-2">
+                                              <Button 
+                                                size="sm" 
+                                                onClick={() => {
+                                                  handleEditSVG(tab);
+                                                }}
+                                                className="py-1 rounded"
+                                              >
+                                                Edit Using Editor
+                                              </Button>
+                                            </div>
+                                          )}
+                                        </>
                                       )}
                                       {tab.type === 'video' && (
-                                        <video controls className="max-w-full h-auto">
+                                        <video controls className="max-w-full max-h-full h-auto">
                                           <source src={tab.content.url}/>
                                           Your browser does not support the video tag.
                                         </video>
                                       )}
                                       {tab.type === 'audio' && (
-                                        <audio controls className="w-full mt-8">
+                                        <audio controls className="max-w-full max-h-full h-auto">
                                           <source src={tab.content.url}/>
                                           Your browser does not support the audio tag.
                                         </audio>
@@ -1579,7 +2168,58 @@ export default function CodeEditor({ params }) {
                   </div>
                 </ResizablePanelGroup>
               </ResizablePanel>
-              
+              {/* Debug Mode */}
+              {localStorage.getItem("debugMode") === "true" && (
+                <div className="fixed bottom-2 right-2 cursor-pointer rounded-md bg-[#ffffff20] border p-1 z-[9999] w-1/4 h-1/4 overflow-auto p-2">
+                  {/* display all the local storage items */}
+                  <div className="flex flex-col gap-y-1">
+
+                  <div className="text-md font-semibold">useStates</div>
+                  <div className="flex flex-col gap-y-1 text-xs overflow-auto max-h-[70%] text-muted-foreground">
+                    <div><span className="font-semibold">files:</span> {files.length} items</div>
+                    <div><span className="font-semibold">error:</span> {error ? error : 'null'}</div>
+                    <div><span className="font-semibold">code length:</span> {code ? code.length : 0} chars</div>
+                    <div><span className="font-semibold">currentPath:</span> {currentPath || 'empty'}</div>
+                    <div><span className="font-semibold">sidebarOpen:</span> {sidebarOpen.toString()}</div>
+                    <div><span className="font-semibold">folderContents:</span> {Object.keys(folderContents).length} folders</div>
+                    <div><span className="font-semibold">allBranches:</span> {allBranches.length} branches</div>
+                    <div><span className="font-semibold">defaultBranch:</span> {defaultBranch || 'not set'}</div>
+                    <div><span className="font-semibold">settingsFile:</span> {Object.keys(settingsFile).length} keys</div>
+                    <div><span className="font-semibold">loadingFolders:</span> {Object.keys(loadingFolders).filter(k => loadingFolders[k]).length} loading</div>
+                    <div><span className="font-semibold">sidebarLoading:</span> {sidebarLoading.toString()}</div>
+                    <div><span className="font-semibold">lastClickedFile:</span> {lastClickedFile || 'root'}</div>
+                    <div><span className="font-semibold">runFuctionFile:</span> {runFuctionFile || 'root'}</div>
+                    <div><span className="font-semibold">panelGroups:</span> {panelGroups.length} panels</div>
+                    <div><span className="font-semibold">activePanelId:</span> {activePanelId}</div>
+                    <div><span className="font-semibold">hoveringPanelId:</span> {hoveringPanelId || 'none'}</div>
+                    <div><span className="font-semibold">config:</span> 
+                      <div className="pl-2">
+                        <div>repoFullName: {config.repoFullName}</div>
+                        <div>codeKind: {config.codeKind || 'unset'}</div>
+                        <div>autoSaveBranch: {config.autoSaveBranch}</div>
+                      </div>
+                    </div>
+                    <div><span className="font-semibold">isSavingSettings:</span> {isSavingSettings.toString()}</div>
+                    <div><span className="font-semibold">isCodeKindSet:</span> {isCodeKindSet.toString()}</div>
+                    <div><span className="font-semibold">isAutoSaveBranchSet:</span> {isAutoSaveBranchSet.toString()}</div>
+                    <div><span className="font-semibold">pendingSaves:</span> {pendingSaves.length} files</div>
+                    <div><span className="font-semibold">activeId:</span> {activeId || 'none'}</div>
+                    <div><span className="font-semibold">editingPath:</span> {editingPath || 'none'}</div>
+                    <div><span className="font-semibold">editingNewFolderPath:</span> {editingNewFolderPath || 'none'}</div>
+                    <div><span className="font-semibold">editingNewFilePath:</span> {editingNewFilePath || 'none'}</div>
+                    <div><span className="font-semibold">openedFolders:</span> {openedFolders.length} folders</div>
+                  </div>
+                    <div className="text-md font-semibold">Local Storage</div>
+                    {Object.entries(localStorage).map(([key, value]) => (
+                      <div key={key} className="flex flex-col gap-y-1">
+                        <div className="text-sm text-muted-foreground">
+                          {key}: {value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
           </ResizablePanelGroup>
       </SidebarProvider>
       </ClerkProvider>

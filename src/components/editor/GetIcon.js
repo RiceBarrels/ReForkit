@@ -92,10 +92,13 @@ export const getFileIcon = (name) => {
       //reforkit files
       case 'reforkitsettings':
         return <img src="/Logo.svg" width={16} height={16} alt="Reforkit" />;
-      // reforkit utility tabs
-      case 'reforkitnewtab':
-        return <Plus size={16}/>;
-      case 'reforkitutilitytab':
+      case 'reforkit':
+        return <img src="/Logo.svg" width={16} height={16} alt="Reforkit" />;
+
+      //replit files
+      case 'replit':
+        return <img src="/replit.png" width={16} height={16} alt="Replit" />;
+      case 'replitutilitytab':
         return <Settings size={16}/>;
       case 'reforkitpreviewtab':
         return <Eye size={16}/>;

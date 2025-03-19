@@ -1,5 +1,3 @@
-"use client"
-import { motion } from "framer-motion"
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
 
@@ -14,26 +12,15 @@ export default function PrivacyPolicy() {
           <span>Privacy Policy</span>
         </div>
         
-        <motion.h1 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-4xl font-bold mb-6"
-        >
-          Privacy Policy
-        </motion.h1>
+        <h1 className="text-4xl font-bold mb-6">Privacy Policy</h1>
         <p className="text-muted-foreground text-lg">Last updated: {new Date().toLocaleDateString()}</p>
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="prose prose-lg dark:prose-invert max-w-none space-y-12"
-      >
+      <div className="prose prose-lg dark:prose-invert max-w-none space-y-12">
         {/* Introduction */}
         <div className="bg-muted/50 p-6 rounded-lg">
           <p className="text-lg leading-relaxed">
-            At Reforkit, we take your privacy seriously. This Privacy Policy explains how we collect, use, 
+            At Reforkit, we take your privacy seriously. This Privacy Policy explains how we collect, use,
             disclose, and safeguard your information when you use our web-based code editor platform.
           </p>
         </div>
@@ -75,7 +62,7 @@ export default function PrivacyPolicy() {
           <h2 className="text-3xl font-bold mb-6" id="cookies">Cookies and Tracking Technologies</h2>
           <div className="space-y-6">
             <p className="text-lg">
-              We use cookies and similar tracking technologies to track the activity on our service and hold certain information. 
+              We use cookies and similar tracking technologies to track the activity on our service and hold certain information.
               Cookies are files with a small amount of data that may include an anonymous unique identifier.
             </p>
 
@@ -108,8 +95,8 @@ export default function PrivacyPolicy() {
           <h2 className="text-3xl font-bold mb-6 pb-2 border-b">Advertising</h2>
           <div className="space-y-6">
             <p className="text-lg">
-              We may use third-party advertising services to serve advertisements when you visit our website. These 
-              services may use information about your visits to our website and other websites to provide relevant 
+              We may use third-party advertising services to serve advertisements when you visit our website. These
+              services may use information about your visits to our website and other websites to provide relevant
               advertisements about goods and services that may interest you.
             </p>
 
@@ -146,7 +133,7 @@ export default function PrivacyPolicy() {
             contact@reforkit.com
           </Link>
         </section>
-      </motion.div>
+      </div>
     </div>
   )
 }

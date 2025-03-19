@@ -9,6 +9,23 @@ import { Octokit } from "@octokit/core";
 // Initialize Clerk client
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
 
+function decodeBase64UTF8(base64Text) {
+  try {
+    // First decode base64 to binary
+    const binaryString = atob(base64Text.replace(/\s/g, ''));
+    // Convert the binary string to an array of byte values
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    // Use TextDecoder to convert the bytes to a UTF-8 string
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch (error) {
+    console.error('Error decoding base64 content:', error);
+    return base64Text; // Return original if decoding fails
+  }
+}
+
 export async function fetchGitHubRepos() {
   try {
     const session = await auth();
@@ -106,110 +123,149 @@ export async function getGitHubTokens(userId=' ') {
   }
 }
 
-export async function GET(request, { params }) {
-  const { username, project, filepath } = params
-  const path = filepath.join('/')
-  
-  try {
-    let response = await fetch(
-      `https://raw.githubusercontent.com/${username}/${project}/${getDefaultBranch(username,project)}/${path}`
-    )
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch file')
-    }
-
-    const content = await response.text()
-    const fileExtension = path.split('.').pop().toLowerCase()
-    
-    // Map common file extensions to MIME types
-    const mimeTypes = {
-      'html': 'text/html',
-      'htm': 'text/html',
-      'asp': 'text/html', // Changed from 'text/asp' to 'text/html'
-      'jsp': 'text/html', // Changed from 'text/jsp' to 'text/html'
-      'php': 'text/html', // Changed from 'text/php' to 'text/html'
-      'py': 'text/x-python', // Changed from 'text/python' to 'text/x-python'
-      'xml': 'application/xml',
-      'aspx': 'text/html', // Changed from 'text/asp.net' to 'text/html'
-      'css': 'text/css',
-      'js': 'application/javascript', // Changed from 'text/javascript' to 'application/javascript'
-      'json': 'application/json',
-      'txt': 'text/plain',
-      'md': 'text/markdown',
-      'svg': 'image/svg+xml',
-      'png': 'image/png',
-      'jpg': 'image/jpeg',
-      'jpeg': 'image/jpeg',
-      'gif': 'image/gif',
-      'ico': 'image/x-icon',
-      'webp': 'image/webp',
-      'pdf': 'application/pdf',
-      'zip': 'application/zip',
-      'tar': 'application/x-tar',
-      'gz': 'application/gzip',
-      'bz2': 'application/x-bzip2',
-      '7z': 'application/x-7z-compressed',
-      'jsonl': 'application/jsonl',
-      'csv': 'text/csv',
-      'tsv': 'text/tab-separated-values',
-      'yml': 'text/yaml',
-      'yaml': 'text/yaml',
-      'jif': 'image/jpeg',
-      'tiff': 'image/tiff',
-      'bmp': 'image/bmp',
-    }
-    const binaryExtensions = ['png', 'jpg', 'jpeg', 'gif', 'ico', 'webp', 'pdf', 'zip', 'tar', 'gz', 'bz2', '7z', 'jif', 'tiff', 'bmp']
-    
-    const contentType = mimeTypes[fileExtension] || 'text/plain'
-    
-    // Handle binary files differently
-    if (binaryExtensions.includes(fileExtension)) {
-      // Get a fresh response for binary files to ensure proper streaming
-      const binaryResponse = await fetch(response.url)
-      if (!binaryResponse.ok) {
-        throw new Error('Failed to fetch binary file')
-      }
-      
-      const arrayBuffer = await binaryResponse.arrayBuffer()
-      return new NextResponse(arrayBuffer, {
-        headers: {
-          'Content-Type': contentType,
-          'Content-Disposition': fileExtension === 'pdf' ? 'inline' : 'attachment',
-        },
-      })
-    }
-    
-    return new NextResponse(content, {
-      headers: {
-        'Content-Type': contentType,
-      },
-    })
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to fetch HTML content' },
-      { status: 500 }
-    )
-  }
-}
-
 export async function getGitHubContents(owner, repo, path = '', branch, isAuthRequired = true) {
   try {
-    // Always try to get auth token first
+    // First, attempt to fetch contents from ungh.cc
+    try {
+      const unghOctokit = new Octokit({ baseUrl: 'https://ungh.cc' });
+      
+      // First attempt to fetch as a file, unless the path ends with a slash
+      if (!path.endsWith('/')) {
+        try {
+          const unghResponse = await unghOctokit.request(
+            'GET /repos/{owner}/{repo}/files/{branch}/{path}', {
+              owner,
+              repo,
+              branch,
+              path
+            }
+          );
+          
+          if (unghResponse && unghResponse.data) {
+            console.log('Fetched from ungh (file):', unghResponse.data);
+            
+            // If the file data is empty, force fallback by throwing an error
+            if (!unghResponse.data.content || unghResponse.data.content.trim() === '') {
+              throw new Error('Empty file content from ungh.cc');
+            }
+            
+            // Use proper UTF-8 decoding if content appears to be base64
+            if (typeof unghResponse.data.content === 'string' && 
+                /^[A-Za-z0-9+/=]+$/.test(unghResponse.data.content.replace(/\s/g, ''))) {
+              return { success: true, content: decodeBase64UTF8(unghResponse.data.content) };
+            }
+            
+            // Return successful response and skip GitHub API fallback
+            return { success: true, content: unghResponse.data.content };
+          }
+        } catch (fileError) {
+          console.error('Error fetching file from ungh.cc:', fileError);
+          // Continue to try directory fetch from ungh.cc before falling back to GitHub API
+        }
+      }
+      
+      // Try to fetch as directory
+      const unghResponse = await unghOctokit.request(
+        'GET /repos/{owner}/{repo}/files/{branch}/', {
+          owner,
+          repo,
+          branch
+        }
+      );
+      
+      if (unghResponse && unghResponse.data && Array.isArray(unghResponse.data.files)) {
+        let unghData;
+        // For repository root, group files so that each top-level directory is only shown once.
+        if (path === '') {
+          const topLevelFiles = [];
+          const topLevelDirsMap = {};
+          unghResponse.data.files.forEach(item => {
+            const itemName = item.path.split('/').pop();
+            // Determine if the item is a directory: either mode equals "040000"
+            // or the name does NOT include a dot.
+
+            const isDirectory = item.path.split('/').length > 1;
+            if (item.path.includes('/')) {
+              const topDir = item.path.split('/')[0];
+              if (!topLevelDirsMap[topDir]) {
+                topLevelDirsMap[topDir] = {
+                  name: topDir,
+                  path: topDir,
+                  sha: item.sha, // using the SHA of the first file in the directory as a placeholder
+                  size: 0,
+                  type: "dir" // For grouped top-level directories, always mark as "dir"
+                };
+              }
+            } else {
+              topLevelFiles.push({
+                name: item.path,
+                path: item.path,
+                sha: item.sha,
+                size: item.size,
+                type: isDirectory ? "dir" : "file"
+              });
+            }
+          });
+          const topLevelDirs = Object.values(topLevelDirsMap);
+          unghData = [...topLevelFiles, ...topLevelDirs];
+          console.log('Fetched from ungh (root):', unghData);
+        } else {
+          // For a provided directory path, group immediate children.
+          const normalizedPath = path.endsWith('/') ? path : `${path}/`;
+          const immediateMap = {};
+          unghResponse.data.files.forEach(item => {
+            if (item.path.startsWith(normalizedPath)) {
+              const remainder = item.path.substring(normalizedPath.length);
+              const immediate = remainder.split('/')[0];
+              
+              // A better way to determine if it's a directory:
+              // If remainder has more segments than just the immediate part, it's a directory
+              const isDirectory = remainder.split('/').length > 1;
+              
+              if (!immediateMap[immediate]) {
+                immediateMap[immediate] = {
+                  name: immediate,
+                  path: normalizedPath + immediate,
+                  sha: item.sha, // Using the first encountered SHA as a placeholder
+                  size: item.size,
+                  type: isDirectory ? "dir" : "file"
+                };
+              }
+            }
+          });
+          unghData = Object.values(immediateMap);
+          console.log('Fetched from ungh (directory):', unghData);
+        }
+
+        // If unghData is populated, return it and skip GitHub API fallback
+        if (unghData && unghData.length > 0) {
+          return { success: true, content: unghData };
+        } else {
+          throw new Error('Empty directory data from ungh.cc');
+        }
+      } else {
+        throw new Error('Malformed response from ungh.cc');
+      }
+    } catch (unghError) {
+      // Log error and explicitly continue to GitHub API fallback
+      console.error('All ungh.cc attempts failed, falling back to GitHub API:', unghError);
+      // Fall through to GitHub API fallback
+    }
+  
+    // GitHub API fallback code...
+    // This code will only execute if all ungh.cc attempts failed
+  
+    // Fallback: Fetch contents from the official GitHub API.
     const session = await auth();
     const { userId } = session;
     let octokit;
-
     if (userId) {
       const tokens = await getGitHubTokens(userId);
       const githubToken = tokens?.data?.[0]?.token;
-      
       if (githubToken) {
         octokit = new Octokit({ auth: githubToken });
       }
     }
-
-    // If no auth token available and not required, use unauthenticated client
     if (!octokit) {
       if (isAuthRequired) {
         return {
@@ -219,24 +275,24 @@ export async function getGitHubContents(owner, repo, path = '', branch, isAuthRe
       }
       octokit = new Octokit();
     }
-
-    // Make the API request with the correct endpoint
-    const response = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
-      owner,
-      repo,
-      path,
-      ...(branch ? { ref: branch } : {}),
-      headers: {
-        'X-GitHub-Api-Version': '2022-11-28'
+  
+    const response = await octokit.request(
+      'GET /repos/{owner}/{repo}/contents/{path}', {
+        owner,
+        repo,
+        path,
+        ...(branch ? { ref: branch } : {}),
+        headers: {
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
       }
-    });
-
-    return {
-      success: true,
-      content: response.data
-    };
-
+    );
+  
+    console.log('Fetched from GitHub API:', response.data);
+    return { success: true, content: response.data };
+  
   } catch (error) {
+    // Main error handler
     console.error('GitHub API Error:', error);
     return {
       success: false,
@@ -354,6 +410,9 @@ export async function forkRepository(owner, repo) {
 }
 
 export async function updateFile(owner, repo, path, branch, content) {
+  // Remove any leading slashes from the path to avoid GitHub API error "path cannot start with a slash"
+  // Also handle URL-encoded leading slashes (%2F)
+  path = path.replace(/^\/+/, '').replace(/^%2F+/i, '');
   try {
     const session = await auth();
     const { userId } = session;
@@ -520,7 +579,201 @@ export async function downloadZIP(owner, repo, branch, path = '') {
   }
 }
 
-export async function rePathFile(owner, repo, path, newPath) {
+export async function rePathFile(owner, repo, branch, oldPath, newPath) {
+  // Remove any leading slashes to prevent GitHub API errors
+  oldPath = oldPath.replace(/^\/+/, '').replace(/^%2F+/i, '');
+  newPath = newPath.replace(/^\/+/, '').replace(/^%2F+/i, '');
+  
+  try {
+    const session = await auth();
+    const { userId } = session;
+    const tokens = await getGitHubTokens(userId);
+    const githubToken = tokens.data[0]?.token;
+    
+    if (!githubToken) {
+      return {
+        success: false,
+        message: 'No valid GitHub token found'
+      };
+    }
+    
+    const octokit = new Octokit({ auth: githubToken });
+
+    // Check if a file already exists at the new path
+    try {
+      const newFileCheck = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+        owner,
+        repo,
+        path: newPath,
+        ref: branch
+      });
+      if (newFileCheck && newFileCheck.data) {
+        return {
+          success: false,
+          message: 'A file already exists at the new path.'
+        };
+      }
+    } catch (checkError) {
+      // If the error is not a 404, return it; otherwise, file doesn't exist and we can proceed.
+      if (checkError.status !== 404) {
+        return {
+          success: false,
+          message: checkError.response?.data?.message || checkError.message
+        };
+      }
+    }
+    
+    // Step 1: Get the existing file details (SHA and content)
+    const fileResponse = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+      owner,
+      repo,
+      path: oldPath,
+      ref: branch
+    });
+    
+    const fileSha = fileResponse.data.sha;
+    const fileContent = fileResponse.data.content; // base64 encoded content
+    
+    // Decode the file content
+    const decodedContent = Buffer.from(fileContent, 'base64').toString('utf8');
+    
+    // Step 2: Create a new file with the new name using the old file's content
+    await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
+      owner,
+      repo,
+      path: newPath,
+      message: `Rename file from ${oldPath} to ${newPath} via Reforkit: ${new Date().toISOString()}`,
+      content: Buffer.from(decodedContent).toString('base64'),
+      branch: branch
+    });
+    
+    // Step 3: Delete the old file using its SHA
+    await octokit.request('DELETE /repos/{owner}/{repo}/contents/{path}', {
+      owner,
+      repo,
+      path: oldPath,
+      message: `Remove old file ${oldPath} after renaming to ${newPath} via Reforkit: ${new Date().toISOString()}`,
+      sha: fileSha,
+      branch: branch
+    });
+    
+    return {
+      success: true,
+      message: 'File renamed successfully'
+    };
+    
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message || 'Failed to rename file'
+    };
+  }
+}
+
+export async function renameFolder(owner, repo, oldFolder, newFolder, branch) {
+  try {
+    // Remove any leading slashes from paths to avoid GitHub API error
+    oldFolder = oldFolder.replace(/^\/+/, '').replace(/^%2F+/i, '');
+    newFolder = newFolder.replace(/^\/+/, '').replace(/^%2F+/i, '');
+    
+    const session = await auth();
+    const { userId } = session;
+    const tokens = await getGitHubTokens(userId);
+    const githubToken = tokens.data[0]?.token;
+  
+    if (!githubToken) {
+      return {
+        success: false,
+        message: 'No valid GitHub token found'
+      };
+    }
+  
+    const octokit = new Octokit({ auth: githubToken });
+  
+    // Get the list of contents in the old folder
+    const { data: items } = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+      owner,
+      repo,
+      path: oldFolder,
+      ref: branch
+    });
+  
+    for (const item of items) {
+      if (item.type === 'dir') {
+        // Recursively rename subdirectories.
+        const subOldFolder = item.path;
+        const subNewFolder = `${newFolder}/${item.name}`;
+        const result = await renameFolder(owner, repo, subOldFolder, subNewFolder, branch);
+        if (!result.success) {
+          throw new Error(`Failed to rename subfolder ${item.name}: ${result.message}`);
+        }
+        continue;
+      }
+  
+      if (item.type !== 'file') {
+        console.log(`Skipping non-file item: ${item.name} (${item.type})`);
+        continue;
+      }
+  
+      // Retrieve full file details for content and SHA
+      const { data: fileData } = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+        owner,
+        repo,
+        path: item.path,
+        ref: branch
+      });
+  
+      // Remove newline characters from the base64-encoded content
+      const content = fileData.content.replace(/\n/g, '');
+  
+      // Create the file in the new folder (do not include SHA since it does not exist yet)
+      const newPath = `${newFolder}/${item.name}`.replace(/^\/+/, '').replace(/^%2F+/i, '');
+      await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
+        owner,
+        repo,
+        path: newPath,
+        message: `Move ${item.name} to ${newFolder} via Reforkit - ${new Date().toISOString()}`,
+        content: content,
+        branch: branch
+      });
+  
+      console.log(`Moved file: ${item.name}`);
+  
+      // Delete the original file from the old folder
+      await octokit.request('DELETE /repos/{owner}/{repo}/contents/{path}', {
+        owner,
+        repo,
+        path: item.path,
+        message: `Delete ${item.name} from ${oldFolder} after moving to ${newFolder} - ${new Date().toISOString()}`,
+        sha: fileData.sha,
+        branch: branch
+      });
+  
+      console.log(`Deleted original file: ${item.name}`);
+    }
+  
+    console.log("Folder renamed successfully!");
+    return {
+      success: true,
+      message: 'Folder renamed successfully'
+    };
+  
+  } catch (error) {
+    console.error("Error renaming folder:", error);
+    return {
+      success: false,
+      message: error.message || 'Failed to rename folder'
+    };
+  }
+}
+
+export async function createFile(owner, repo, parentPath, fileName, branch, content = '') {
+  // Construct the full path by combining parentPath and fileName
+  const fullPath = parentPath ? `${parentPath}/${fileName}` : fileName;
+  // Remove any leading slashes from the path to avoid GitHub API error
+  const cleanPath = fullPath.replace(/^\/+/, '').replace(/^%2F+/i, '');
+  
   try {
     const session = await auth();
     const { userId } = session;
@@ -536,26 +789,310 @@ export async function rePathFile(owner, repo, path, newPath) {
 
     const octokit = new Octokit({ auth: githubToken });
 
-    const response = await octokit.request('POST /repos/{owner}/{repo}/contents/{path}', {
+    // Get default branch if not provided
+    let targetBranch = branch;
+    if (!targetBranch) {
+      const defaultBranchResult = await getDefaultBranch(owner, repo);
+      if (!defaultBranchResult.success) {
+        return {
+          success: false,
+          message: 'Failed to determine default branch'
+        };
+      }
+      targetBranch = defaultBranchResult.default_branch;
+    }
+
+    // Check if file already exists
+    try {
+      const existingFile = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+        owner,
+        repo,
+        path: cleanPath,
+        ref: targetBranch
+      });
+      
+      if (existingFile.status === 200) {
+        return {
+          success: false,
+          message: 'File already exists'
+        };
+      }
+    } catch (error) {
+      // 404 is expected if the file doesn't exist, we continue
+      if (error.status !== 404) {
+        return {
+          success: false,
+          message: error.response?.data?.message || 'Failed to check if file exists'
+        };
+      }
+    }
+
+    // Create the file - use a space for empty files to make valid base64
+    const contentToUse = content === '' ? ' ' : content;
+    
+    // Create the file
+    const response = await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
       owner,
       repo,
-      path,
-      new_name: newPath,
-      headers: {
-        'X-GitHub-Api-Version': '2022-11-28'
-      }
+      path: cleanPath,
+      message: `Create ${fileName} via Reforkit: ${new Date().toISOString()}`,
+      content: Buffer.from(contentToUse).toString('base64'),
+      branch: targetBranch
     });
 
     return {
       success: true,
-      message: 'File renamed successfully',
+      message: 'File created successfully',
       response: response.data
     };
   } catch (error) {
     console.error('GitHub API Error:', error);
     return {
       success: false,
-      message: error.message || 'Failed to rename file'
+      message: error.response?.data?.message || error.message || 'Failed to create file'
     };
   }
 }
+
+export async function createFolder(owner, repo, parentPath, folderName, branch) {
+  // Construct the full path by combining parentPath and folderName
+  const fullPath = parentPath ? `${parentPath}/${folderName}` : folderName;
+  // Remove any leading slashes to avoid GitHub API errors
+  const cleanPath = fullPath.replace(/^\/+/, '').replace(/^%2F+/i, '');
+  
+  try {
+    const session = await auth();
+    const { userId } = session;
+    const tokens = await getGitHubTokens(userId);
+    const githubToken = tokens.data[0]?.token;
+    
+    if (!githubToken) {
+      return {
+        success: false,
+        message: 'No valid GitHub token found'
+      };
+    }
+    
+    const octokit = new Octokit({ auth: githubToken });
+    
+    // Get default branch if not provided
+    let targetBranch = branch;
+    if (!targetBranch) {
+      const defaultBranchResult = await getDefaultBranch(owner, repo);
+      if (!defaultBranchResult.success) {
+        return {
+          success: false,
+          message: 'Failed to determine default branch'
+        };
+      }
+      targetBranch = defaultBranchResult.default_branch;
+    }
+    
+    // Check if any part of the path is already a file
+    // Split the path and check progressively
+    const pathParts = cleanPath.split('/');
+    let currentPath = '';
+    
+    for (let i = 0; i < pathParts.length; i++) {
+      if (currentPath) {
+        currentPath += '/';
+      }
+      currentPath += pathParts[i];
+      
+      try {
+        const response = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+          owner,
+          repo,
+          path: currentPath,
+          ref: targetBranch
+        });
+        
+        // If we get here and the response is not a directory, it means a file exists
+        // at this level of the path hierarchy
+        if (!Array.isArray(response.data)) {
+          return {
+            success: false,
+            message: `Cannot create folder: a file already exists at "${currentPath}". Choose a different path.`
+          };
+        }
+      } catch (error) {
+        // 404 is expected if path doesn't exist yet
+        if (error.status !== 404) {
+          return {
+            success: false,
+            message: error.response?.data?.message || `Failed to check path "${currentPath}"`
+          };
+        }
+      }
+    }
+    
+    // Use the createFile function to create a placeholder file in the folder
+    const result = await createFile(owner, repo, fullPath, '.gitkeep', branch, '');
+    
+    if (result.success) {
+      // now delete the .gitkeep file
+      return {
+        success: true,
+        message: 'Folder created successfully',
+        response: result.response
+      };
+    } else {
+      return result; // Pass through any error from createFile
+    }
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    
+    // Handle the specific 409 conflict error with a user-friendly message
+    if (error.status === 409) {
+      return {
+        success: false,
+        message: "Cannot create folder: a file exists where you're trying to create a directory. Please choose a different path."
+      };
+    }
+    
+    return {
+      success: false,
+      message: error.message || 'Failed to create folder'
+    };
+  }
+}
+
+export async function deleteFile(owner, repo, path, branch) {
+  // Remove any leading slashes from the path
+  path = path.replace(/^\/+/, '').replace(/^%2F+/i, '');
+  
+  try {
+    const session = await auth();
+    const { userId } = session;
+    const tokens = await getGitHubTokens(userId);
+    const githubToken = tokens.data[0]?.token;
+
+    if (!githubToken) {
+      return {
+        success: false,
+        message: 'No valid GitHub token found'
+      };
+    }
+
+    const octokit = new Octokit({ auth: githubToken });
+
+    // Get default branch if not provided
+    let targetBranch = branch;
+    if (!targetBranch) {
+      const defaultBranchResult = await getDefaultBranch(owner, repo);
+      if (!defaultBranchResult.success) {
+        return {
+          success: false,
+          message: 'Failed to determine default branch'
+        };
+      }
+      targetBranch = defaultBranchResult.default_branch;
+    }
+
+    // First get the file's SHA, which is required for deletion
+    const fileDetails = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+      owner,
+      repo,
+      path,
+      ref: targetBranch
+    });
+
+    // Delete the file
+    const response = await octokit.request('DELETE /repos/{owner}/{repo}/contents/{path}', {
+      owner,
+      repo,
+      path,
+      message: `Delete ${path} via Reforkit: ${new Date().toISOString()}`,
+      sha: fileDetails.data.sha,
+      branch: targetBranch
+    });
+
+    return {
+      success: true,
+      message: 'File deleted successfully',
+      response: response.data
+    };
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message || 'Failed to delete file'
+    };
+  }
+}
+
+export async function deleteFolder(owner, repo, folderPath, branch) {
+  // Remove any leading slashes from the path
+  folderPath = folderPath.replace(/^\/+/, '').replace(/^%2F+/i, '');
+  
+  try {
+    const session = await auth();
+    const { userId } = session;
+    const tokens = await getGitHubTokens(userId);
+    const githubToken = tokens.data[0]?.token;
+
+    if (!githubToken) {
+      return {
+        success: false,
+        message: 'No valid GitHub token found'
+      };
+    }
+
+    const octokit = new Octokit({ auth: githubToken });
+
+    // Get default branch if not provided
+    let targetBranch = branch;
+    if (!targetBranch) {
+      const defaultBranchResult = await getDefaultBranch(owner, repo);
+      if (!defaultBranchResult.success) {
+        return {
+          success: false,
+          message: 'Failed to determine default branch'
+        };
+      }
+      targetBranch = defaultBranchResult.default_branch;
+    }
+
+    // Get all items in the folder
+    const { data: items } = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+      owner,
+      repo,
+      path: folderPath,
+      ref: targetBranch
+    });
+
+    // Process each item in the folder
+    for (const item of items) {
+      if (item.type === 'dir') {
+        // Recursively delete subdirectories
+        const result = await deleteFolder(owner, repo, item.path, targetBranch);
+        if (!result.success) {
+          throw new Error(`Failed to delete subfolder ${item.name}: ${result.message}`);
+        }
+      } else if (item.type === 'file') {
+        // Delete individual files
+        await octokit.request('DELETE /repos/{owner}/{repo}/contents/{path}', {
+          owner,
+          repo,
+          path: item.path,
+          message: `Delete ${item.name} from ${folderPath} via Reforkit: ${new Date().toISOString()}`,
+          sha: item.sha,
+          branch: targetBranch
+        });
+        console.log(`Deleted file: ${item.name}`);
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Folder deleted successfully'
+    };
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message || 'Failed to delete folder'
+    };
+  }
+}
+

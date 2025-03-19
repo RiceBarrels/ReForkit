@@ -11,7 +11,6 @@ export default function Settings() {
         { id: "User", label: "User" },
         { id: "Editor", label: "Editor" },
         { id: "Appearance", label: "Appearance" },
-        { id: "Advanced", label: "Advanced" },
         { id: "Beta", label: "Beta" },
     ];
 

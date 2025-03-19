@@ -115,7 +115,15 @@ const isImageFile = (filename) => {
 const decodeBase64Content = (content, encoding) => {
     if (encoding === 'base64') {
         try {
-            return atob(content.replace(/\s/g, ''));
+            // First decode base64 to binary
+            const binaryString = atob(content.replace(/\s/g, ''));
+            // Convert the binary string to an array of byte values
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            // Use TextDecoder to convert the bytes to a UTF-8 string
+            return new TextDecoder('utf-8').decode(bytes);
         } catch (e) {
             console.error('Failed to decode base64 content:', e);
             return content;
@@ -216,6 +224,10 @@ export default function GithubProjectPage({ params }) {
 
         fetchData();
     }, [resolvedParams.username, resolvedParams.project]);
+
+    useEffect(() => {
+        console.log(data)
+    }, [data])
 
     // Update the handleFileClick function
     const handleFileClick = async (file) => {

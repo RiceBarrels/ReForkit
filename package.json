@@ -1,7 +1,7 @@
 {
   "name": "reforkit",
-  "version": "0.1.4.1",
-  "stage": "beta",
+  "version": "0.1.5",
+  "stage": "closed beta",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",

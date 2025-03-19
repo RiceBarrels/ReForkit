@@ -22,21 +22,30 @@ export function UserSettings() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
         >
-            <motion.h1 
-                className="text-2xl font-bold mb-2"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-            >
-                User Settings
-            </motion.h1>
-            <motion.div
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: 1 }}
-                transition={{ delay: 0.3 }}
-            >
+            <TooltipProvider delayDuration={100}>
+                <motion.h1 
+                    className="text-2xl font-bold mb-2"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 }}
+                >
+                    User Settings
+                </motion.h1>
+
                 <Separator />
-            </motion.div>
+
+                <motion.div
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="flex flex-col gap-y-3 mt-2"
+                >
+                    <div className="flex flex-col gap-2 p-4 rounded-lg hover:bg-muted transition">
+                        <Label className="font-semibold">Personal Information</Label>
+                        <p className="text-sm text-muted-foreground">Manage your personal account information and preferences.</p>
+                    </div>
+                </motion.div>
+            </TooltipProvider>
         </motion.div>
     )
 }
@@ -50,53 +59,39 @@ export function AppearanceSettings() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
         >
-            <motion.h1 
-                className="text-2xl font-bold mb-2"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-            >
-                Appearance Settings
-            </motion.h1>
-            <motion.div
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: 1 }}
-                transition={{ delay: 0.3 }}
-            >
+            <TooltipProvider delayDuration={100}>
+                <motion.h1 
+                    className="text-2xl font-bold mb-2"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 }}
+                >
+                    Appearance Settings
+                </motion.h1>
+
                 <Separator />
-            </motion.div>
-            <motion.div 
-                className="flex flex-col gap-2 mt-4"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-            >
-                <motion.div 
-                    className="flex items-center gap-2"
-                    whileHover={{ x: 5 }}
-                    transition={{ type: "spring", stiffness: 400 }}
+
+                <motion.div
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="flex flex-col gap-y-3 mt-2"
                 >
-                    <Switch 
-                        id="dark-mode" 
-                        onCheckedChange={() => setTheme(theme === "dark" ? "light" : "dark")}
-                        checked={theme === "dark"}
-                    />
-                    <Label 
-                        htmlFor="dark-mode" 
-                        className="text-lg font-semibold"
-                    >
-                        Dark Mode
-                    </Label>
+                    <div className="flex flex-col gap-2 p-4 rounded-lg hover:bg-muted transition">
+                        <Label className="font-semibold" htmlFor="dark-mode">Dark Mode</Label>
+                        <p className="text-sm text-muted-foreground">Dark mode will change the appearance of the editor and the entire application to a darker color scheme.</p>
+                        <div className="flex items-center gap-2">
+                            <div>Light</div>
+                            <Switch 
+                                id="dark-mode" 
+                                onCheckedChange={() => setTheme(theme === "dark" ? "light" : "dark")}
+                                checked={theme === "dark"}
+                            />
+                            <div>Dark</div>
+                        </div>
+                    </div>
                 </motion.div>
-                <motion.p 
-                    className="text-sm text-muted-foreground"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.5 }}
-                >
-                    Dark mode will change the appearance of the editor and the entire application to a darker color scheme.
-                </motion.p>
-            </motion.div>
+            </TooltipProvider>
         </motion.div>
     )
 }
@@ -241,6 +236,7 @@ export function EditorSettings() {
         </motion.div>
     )
 }
+
 export function AdvancedSettings() {
     return (
         <motion.div
@@ -248,47 +244,111 @@ export function AdvancedSettings() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
         >
-            <motion.h1 
-                className="text-2xl font-bold mb-2"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-            >
-                Advanced Settings
-            </motion.h1>
-            <motion.div
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: 1 }}
-                transition={{ delay: 0.3 }}
-            >
+            <TooltipProvider delayDuration={100}>
+                <motion.h1 
+                    className="text-2xl font-bold mb-2"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 }}
+                >
+                    Advanced Settings
+                </motion.h1>
+
                 <Separator />
-            </motion.div>
+
+                <motion.div
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="flex flex-col gap-y-3 mt-2"
+                >
+                    <div className="flex flex-col gap-2 p-4 rounded-lg hover:bg-muted transition">
+                        <Label className="font-semibold">Advanced Configuration</Label>
+                        <p className="text-sm text-muted-foreground">Configure advanced settings for the application.</p>
+                    </div>
+                </motion.div>
+            </TooltipProvider>
         </motion.div>
     )
 }
 
 export function BetaSettings() {
+    const defaultDebugMode = defaultEditorValue.debugMode;
+    const [debugMode, setDebugMode] = useState(localStorage.getItem('debugMode') === 'true' || false);
+    const [savedDebugMode, setSavedDebugMode] = useState(localStorage.getItem('debugMode') === 'true' || false);
+
+    const handleDebugModeChange = () => {
+        localStorage.setItem('debugMode', debugMode.toString());
+        setSavedDebugMode(debugMode);
+        toast.success(`Debug mode ${debugMode ? 'enabled' : 'disabled'}`);
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
         >
-            <motion.h1 
-                className="text-2xl font-bold mb-2"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-            >
-                Beta Settings
-            </motion.h1>
-            <motion.div
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: 1 }}
-                transition={{ delay: 0.3 }}
-            >
+            <TooltipProvider delayDuration={100}>
+                <motion.h1 
+                    className="text-2xl font-bold mb-2"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 }}
+                >
+                    Beta Settings
+                </motion.h1>
+
                 <Separator />
-            </motion.div>
+
+                <motion.div
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="flex flex-col gap-y-3 mt-2"
+                >
+                    <div className="flex flex-col gap-2 p-4 rounded-lg hover:bg-muted transition">
+                        <Label className="font-semibold" htmlFor="debug-mode">Debug Mode</Label>
+                        <p className="text-sm text-muted-foreground">Enable debug mode to see additional information for development and testing.</p>
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-1">
+                                <div>Off</div>
+                                <Switch 
+                                    id="debug-mode" 
+                                    checked={debugMode}
+                                    onCheckedChange={() => setDebugMode(!debugMode)}
+                                />
+                                <div>On</div>
+                            </div>
+                            <div className="flex gap-2">
+                                {debugMode !== savedDebugMode && (
+                                    <Button variant="outline" onClick={handleDebugModeChange}>
+                                        <Save size={16} /> <span>Save</span>
+                                    </Button>
+                                )}
+                                
+                                {debugMode !== defaultDebugMode && (
+                                    <Tooltip>
+                                        <TooltipTrigger>
+                                            <Button variant="outline" onClick={() => {
+                                                setDebugMode(defaultDebugMode);
+                                                localStorage.setItem('debugMode', defaultDebugMode.toString());
+                                                setSavedDebugMode(defaultDebugMode);
+                                                toast.success(`Debug mode ${defaultDebugMode ? 'enabled' : 'disabled'}`);
+                                            }}>
+                                                <RefreshCw size={16} /> <span>Reset</span>
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            Reset to default
+                                        </TooltipContent>
+                                    </Tooltip>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </motion.div>
+            </TooltipProvider>
         </motion.div>
     )
 }
