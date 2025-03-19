@@ -887,9 +887,9 @@ export default function CodeEditor({ params }) {
         );
       } else if (item.type === 'file') {
       return (
-        <ContextMenu>
+        <ContextMenu key={itemPath}>
           <ContextMenuTrigger>
-            <TooltipProvider key={itemPath} delayDuration={100} asChild>
+            <TooltipProvider delayDuration={100} asChild>
               <Tooltip asChild>
                 <TooltipTrigger asChild>
                   <Button
