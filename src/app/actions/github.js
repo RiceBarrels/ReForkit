@@ -123,133 +123,135 @@ export async function getGitHubTokens(userId=' ') {
   }
 }
 
-export async function getGitHubContents(owner, repo, path = '', branch, isAuthRequired = true) {
+export async function getGitHubContents(owner, repo, path = '', branch, isAuthRequired = true, isPrivate = false) {
   try {
     // First, attempt to fetch contents from ungh.cc
-    try {
-      const unghOctokit = new Octokit({ baseUrl: 'https://ungh.cc' });
-      
-      // First attempt to fetch as a file, unless the path ends with a slash
-      if (!path.endsWith('/')) {
-        try {
-          const unghResponse = await unghOctokit.request(
-            'GET /repos/{owner}/{repo}/files/{branch}/{path}', {
-              owner,
-              repo,
-              branch,
-              path
-            }
-          );
-          
-          if (unghResponse && unghResponse.data) {
-            console.log('Fetched from ungh (file):', unghResponse.data);
-            
-            // If the file data is empty, force fallback by throwing an error
-            if (!unghResponse.data.content || unghResponse.data.content.trim() === '') {
-              throw new Error('Empty file content from ungh.cc');
-            }
-            
-            // Use proper UTF-8 decoding if content appears to be base64
-            if (typeof unghResponse.data.content === 'string' && 
-                /^[A-Za-z0-9+/=]+$/.test(unghResponse.data.content.replace(/\s/g, ''))) {
-              return { success: true, content: decodeBase64UTF8(unghResponse.data.content) };
-            }
-            
-            // Return successful response and skip GitHub API fallback
-            return { success: true, content: unghResponse.data.content };
-          }
-        } catch (fileError) {
-          console.error('Error fetching file from ungh.cc:', fileError);
-          // Continue to try directory fetch from ungh.cc before falling back to GitHub API
-        }
-      }
-      
-      // Try to fetch as directory
-      const unghResponse = await unghOctokit.request(
-        'GET /repos/{owner}/{repo}/files/{branch}/', {
-          owner,
-          repo,
-          branch
-        }
-      );
-      
-      if (unghResponse && unghResponse.data && Array.isArray(unghResponse.data.files)) {
-        let unghData;
-        // For repository root, group files so that each top-level directory is only shown once.
-        if (path === '') {
-          const topLevelFiles = [];
-          const topLevelDirsMap = {};
-          unghResponse.data.files.forEach(item => {
-            const itemName = item.path.split('/').pop();
-            // Determine if the item is a directory: either mode equals "040000"
-            // or the name does NOT include a dot.
-
-            const isDirectory = item.path.split('/').length > 1;
-            if (item.path.includes('/')) {
-              const topDir = item.path.split('/')[0];
-              if (!topLevelDirsMap[topDir]) {
-                topLevelDirsMap[topDir] = {
-                  name: topDir,
-                  path: topDir,
-                  sha: item.sha, // using the SHA of the first file in the directory as a placeholder
-                  size: 0,
-                  type: "dir" // For grouped top-level directories, always mark as "dir"
-                };
+    if (!isPrivate) {
+      try {
+        const unghOctokit = new Octokit({ baseUrl: 'https://ungh.cc' });
+        
+        // First attempt to fetch as a file, unless the path ends with a slash
+        if (!path.endsWith('/')) {
+          try {
+            const unghResponse = await unghOctokit.request(
+              'GET /repos/{owner}/{repo}/files/{branch}/{path}', {
+                owner,
+                repo,
+                branch,
+                path
               }
-            } else {
-              topLevelFiles.push({
-                name: item.path,
-                path: item.path,
-                sha: item.sha,
-                size: item.size,
-                type: isDirectory ? "dir" : "file"
-              });
+            );
+            
+            if (unghResponse && unghResponse.data) {
+              console.log('Fetched from ungh (file):', unghResponse.data);
+              
+              // If the file data is empty, force fallback by throwing an error
+              if (!unghResponse.data.content || unghResponse.data.content.trim() === '') {
+                throw new Error('Empty file content from ungh.cc');
+              }
+              
+              // Use proper UTF-8 decoding if content appears to be base64
+              if (typeof unghResponse.data.content === 'string' && 
+                  /^[A-Za-z0-9+/=]+$/.test(unghResponse.data.content.replace(/\s/g, ''))) {
+                return { success: true, content: decodeBase64UTF8(unghResponse.data.content) };
+              }
+              
+              // Return successful response and skip GitHub API fallback
+              return { success: true, content: unghResponse.data.content };
             }
-          });
-          const topLevelDirs = Object.values(topLevelDirsMap);
-          unghData = [...topLevelFiles, ...topLevelDirs];
-          console.log('Fetched from ungh (root):', unghData);
-        } else {
-          // For a provided directory path, group immediate children.
-          const normalizedPath = path.endsWith('/') ? path : `${path}/`;
-          const immediateMap = {};
-          unghResponse.data.files.forEach(item => {
-            if (item.path.startsWith(normalizedPath)) {
-              const remainder = item.path.substring(normalizedPath.length);
-              const immediate = remainder.split('/')[0];
-              
-              // A better way to determine if it's a directory:
-              // If remainder has more segments than just the immediate part, it's a directory
-              const isDirectory = remainder.split('/').length > 1;
-              
-              if (!immediateMap[immediate]) {
-                immediateMap[immediate] = {
-                  name: immediate,
-                  path: normalizedPath + immediate,
-                  sha: item.sha, // Using the first encountered SHA as a placeholder
+          } catch (fileError) {
+            console.error('Error fetching file from ungh.cc:', fileError);
+            // Continue to try directory fetch from ungh.cc before falling back to GitHub API
+          }
+        }
+        
+        // Try to fetch as directory
+        const unghResponse = await unghOctokit.request(
+          'GET /repos/{owner}/{repo}/files/{branch}/', {
+            owner,
+            repo,
+            branch
+          }
+        );
+        
+        if (unghResponse && unghResponse.data && Array.isArray(unghResponse.data.files)) {
+          let unghData;
+          // For repository root, group files so that each top-level directory is only shown once.
+          if (path === '') {
+            const topLevelFiles = [];
+            const topLevelDirsMap = {};
+            unghResponse.data.files.forEach(item => {
+              const itemName = item.path.split('/').pop();
+              // Determine if the item is a directory: either mode equals "040000"
+              // or the name does NOT include a dot.
+
+              const isDirectory = item.path.split('/').length > 1;
+              if (item.path.includes('/')) {
+                const topDir = item.path.split('/')[0];
+                if (!topLevelDirsMap[topDir]) {
+                  topLevelDirsMap[topDir] = {
+                    name: topDir,
+                    path: topDir,
+                    sha: item.sha, // using the SHA of the first file in the directory as a placeholder
+                    size: 0,
+                    type: "dir" // For grouped top-level directories, always mark as "dir"
+                  };
+                }
+              } else {
+                topLevelFiles.push({
+                  name: item.path,
+                  path: item.path,
+                  sha: item.sha,
                   size: item.size,
                   type: isDirectory ? "dir" : "file"
-                };
+                });
               }
-            }
-          });
-          unghData = Object.values(immediateMap);
-          console.log('Fetched from ungh (directory):', unghData);
-        }
+            });
+            const topLevelDirs = Object.values(topLevelDirsMap);
+            unghData = [...topLevelFiles, ...topLevelDirs];
+            console.log('Fetched from ungh (root):', unghData);
+          } else {
+            // For a provided directory path, group immediate children.
+            const normalizedPath = path.endsWith('/') ? path : `${path}/`;
+            const immediateMap = {};
+            unghResponse.data.files.forEach(item => {
+              if (item.path.startsWith(normalizedPath)) {
+                const remainder = item.path.substring(normalizedPath.length);
+                const immediate = remainder.split('/')[0];
+                
+                // A better way to determine if it's a directory:
+                // If remainder has more segments than just the immediate part, it's a directory
+                const isDirectory = remainder.split('/').length > 1;
+                
+                if (!immediateMap[immediate]) {
+                  immediateMap[immediate] = {
+                    name: immediate,
+                    path: normalizedPath + immediate,
+                    sha: item.sha, // Using the first encountered SHA as a placeholder
+                    size: item.size,
+                    type: isDirectory ? "dir" : "file"
+                  };
+                }
+              }
+            });
+            unghData = Object.values(immediateMap);
+            console.log('Fetched from ungh (directory):', unghData);
+          }
 
-        // If unghData is populated, return it and skip GitHub API fallback
-        if (unghData && unghData.length > 0) {
-          return { success: true, content: unghData };
+          // If unghData is populated, return it and skip GitHub API fallback
+          if (unghData && unghData.length > 0) {
+            return { success: true, content: unghData };
+          } else {
+            throw new Error('Empty directory data from ungh.cc');
+          }
         } else {
-          throw new Error('Empty directory data from ungh.cc');
+          throw new Error('Malformed response from ungh.cc');
         }
-      } else {
-        throw new Error('Malformed response from ungh.cc');
+      } catch (unghError) {
+        // Log error and explicitly continue to GitHub API fallback
+        console.error('All ungh.cc attempts failed, falling back to GitHub API:', unghError);
+        // Fall through to GitHub API fallback
       }
-    } catch (unghError) {
-      // Log error and explicitly continue to GitHub API fallback
-      console.error('All ungh.cc attempts failed, falling back to GitHub API:', unghError);
-      // Fall through to GitHub API fallback
     }
   
     // GitHub API fallback code...
@@ -1096,3 +1098,21 @@ export async function deleteFolder(owner, repo, folderPath, branch) {
   }
 }
 
+// check if a repo is private
+export async function IsRepoPrivate(owner, repo) {
+  const session = await auth();
+  const { userId } = session;
+  const tokens = await getGitHubTokens(userId);
+  const githubToken = tokens.data[0]?.token;
+  const octokit = new Octokit({ auth: githubToken });
+  try {
+    const response = await octokit.request('GET /repos/{owner}/{repo}', {
+      owner,
+      repo
+    });
+    return response.data.private;
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return false;
+  }
+}

@@ -1,6 +1,7 @@
 "use client"
 
 import React from 'react';
+import Script from 'next/script'; // <-- Import Next.js Script here
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
@@ -33,7 +34,7 @@ import {
   SidebarGroupLabel,
   SidebarMenu
 } from "@/components/ui/sidebar";
-import { getGitHubContents, getDefaultBranch, getBranches, createBranch, renameFolder, createFile, createFolder, deleteFolder, rePathFile } from '@/app/actions/github';
+import { getGitHubContents, getDefaultBranch, getBranches, createBranch, renameFolder, createFile, createFolder, deleteFolder, rePathFile, IsRepoPrivate } from '@/app/actions/github';
 import { DndContext, DragOverlay} from "@dnd-kit/core";
 import {
   useSensor,
@@ -120,6 +121,7 @@ export default function CodeEditor({ params }) {
           }
       }], activeTab: "preview.reforkitpreviewtab", fileLoading: false, currentContent: { type: "preview"} }
   ]);
+  const [isRepoPrivate, setIsRepoPrivate] = useState(false);
   const [activePanelId, setActivePanelId] = useState(1);
   const [hoveringPanelId, setHoveringPanelId] = useState(null);
   const [config, setConfig] = useState({
@@ -163,7 +165,7 @@ export default function CodeEditor({ params }) {
       }
       setError(null);
       
-      const result = await getGitHubContents(owner, repo, path, settingsFile.autoSaveBranch, true);
+      const result = await getGitHubContents(owner, repo, path, settingsFile.autoSaveBranch, true, isRepoPrivate);
       
       if (!result.success) {
         throw new Error(result.message || 'Failed to fetch directory contents');
@@ -308,7 +310,7 @@ export default function CodeEditor({ params }) {
           return panel;
         }));
       } else {
-        const result = await getGitHubContents(owner, repo, file.path, settingsFile.autoSaveBranch, true);
+        const result = await getGitHubContents(owner, repo, file.path, settingsFile.autoSaveBranch, true, isRepoPrivate);
         
         if (!result.success) {
           throw new Error(result.message || 'Failed to fetch file content');
@@ -362,7 +364,7 @@ export default function CodeEditor({ params }) {
   const handleEditSVG = async (tab) => {
     try {
       // Fetch the file contents as text
-      const result = await getGitHubContents(owner, repo, tab.path, settingsFile.autoSaveBranch, true);
+      const result = await getGitHubContents(owner, repo, tab.path, settingsFile.autoSaveBranch, true, isRepoPrivate);
       if (!result.success) {
         throw new Error(result.message || "Failed to fetch SVG content");
       }
@@ -453,11 +455,15 @@ export default function CodeEditor({ params }) {
     const initializeRepo = async () => {
       if (isLoaded) {
         try {
+          const isPrivateResult = await IsRepoPrivate(owner, repo);
+          // check if repo is private
+          setIsRepoPrivate(isPrivateResult);
+          console.log('isPrivateResult', isPrivateResult);
           // Get default branch first
           const defaultBranchResult = await getDefaultBranch(owner, repo);
           
           // Get settings file
-          const settingsResult = await getGitHubContents(owner, repo, '.reforkitSettings', defaultBranchResult.default_branch, true);
+          const settingsResult = await getGitHubContents(owner, repo, '.reforkitSettings', defaultBranchResult.default_branch, true, isRepoPrivate);
           let settingsData = {};
           
           if (settingsResult.success) {
@@ -483,7 +489,7 @@ export default function CodeEditor({ params }) {
           }
 
           // Get settings file in autoSaveBranch 
-          const autoSaveBranchSettingsResult = await getGitHubContents(owner, repo, '.reforkitSettings', settingsData.autoSaveBranch, true);
+          const autoSaveBranchSettingsResult = await getGitHubContents(owner, repo, '.reforkitSettings', settingsData.autoSaveBranch, true, isPrivateResult);
           let autoSaveBranchSettingsData = {};
           // If the settings are different, update the settings file in the autoSaveBranch
           if (autoSaveBranchSettingsResult.success) {
@@ -532,7 +538,7 @@ export default function CodeEditor({ params }) {
               }
             })));
             // Only fetch directory after we have the branch
-            const result = await getGitHubContents(owner, repo, '', settingsData.autoSaveBranch, true);
+            const result = await getGitHubContents(owner, repo, '', settingsData.autoSaveBranch, true, isRepoPrivate);
             if (!result.success) {
               throw new Error(result.message || 'Failed to fetch directory contents');
             }
@@ -1653,7 +1659,7 @@ export default function CodeEditor({ params }) {
                   <Sidebar className="h-full w-full bg-background" collapsible="none">
                       <TooltipProvider delayDuration={100} skipDelayDuration={100}>
                           <SidebarContent className="h-full">
-                              <SidebarGroup className="h-full p-0">
+                              <SidebarGroup className="h-full p-0  overflow-hidden">
                                   <SidebarGroupLabel id="reforkit-label">Reforkit (Beta)</SidebarGroupLabel>
                                   <Separator className="my-2"/>
                                   <SidebarGroupContent className="h-full">
@@ -1758,7 +1764,17 @@ export default function CodeEditor({ params }) {
                                               </AccordionItem>
                                           </Accordion>
                                           <Separator className=""/>
-                                          <div className="flex-1">ads</div>
+                                          <div className="flex-1">
+                                            <ins className="adsbygoogle"
+                                              style={{display: 'block'}}
+                                              data-ad-client="ca-pub-3107009868155466"
+                                              data-ad-slot="3078972362"
+                                              data-ad-format="auto"
+                                              data-full-width-responsive="true"/>
+                                              <script>
+                                                (adsbygoogle = window.adsbygoogle || []).push({});
+                                              </script>
+                                          </div>
                                       </SidebarMenu>
                                   </SidebarGroupContent>
                               </SidebarGroup>
