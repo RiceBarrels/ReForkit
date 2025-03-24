@@ -86,8 +86,8 @@ export function AppSidebar() {
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mouseup', handleClickOutside);
+    return () => document.removeEventListener('mouseup', handleClickOutside);
   }, [isProfileOpen]);
 
   const sidebarVariants = {
@@ -155,7 +155,7 @@ export function AppSidebar() {
                 </motion.span>
               </motion.div>
               <motion.div
-                animate={{ rotate: isProfileOpen ? 180 : 0, scale: isProfileOpen ? 1.2 : 1, x: isProfileOpen ? -12 : 0, y: isProfileOpen ? 0 : 0 }}
+                animate={{ rotate: isProfileOpen ? 180 : 0, scale: isProfileOpen ? 1.2 : 1, x: isProfileOpen ? "-1rem" : 0, y: isProfileOpen ? 0 : 0 }}
                 transition={{ duration: 0.1 }}
                 className="hover:bg-accent hover:text-accent-foreground p-1 rounded-md cursor-pointer"
                 onClick={() => {if(isProfileOpen)setIsProfileOpen(!isProfileOpen)}}
@@ -231,7 +231,7 @@ export function AppSidebar() {
               <Link href="/login" className="flex-1 flex justify-end items-center">
                 <Button variant="ghost" className="" onClick={() => {setIsProfileOpen(!isProfileOpen)}}>
                   <LogInIcon className="w-4 h-4" />
-                  Login
+                  Sign in
                 </Button>
               </Link>
             </motion.div>
