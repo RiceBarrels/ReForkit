@@ -638,7 +638,7 @@ export default function CodeEditor({ params }) {
                     <ContextMenuTrigger asChild>
                   <AccordionTrigger 
                     id={`${itemPath}-accordion-item`}
-                    className={"py-2.5 mb-1 px-4 rounded-md border-b-0 hover:bg-accent hover:text-accent-foreground border border-transparent relative w-full "+ (runFuctionFile === itemPath ? 'border-blue-500 hover:bg-background ' : '') + (lastClickedFile === itemPath ? 'bg-blue-500 bg-opacity-40 hover:bg-blue-500 hover:bg-opacity-40 ' : '') }
+                    className={"py-2.5 px-4 rounded-md border-b-0 hover:bg-accent hover:text-accent-foreground border border-transparent relative w-full "+ (runFuctionFile === itemPath ? 'border-blue-500 hover:bg-background ' : '') + (lastClickedFile === itemPath ? 'bg-blue-500 bg-opacity-40 hover:bg-blue-500 hover:bg-opacity-40 ' : '') }
                     onClick={(e) => {
                       if (editingPath === itemPath) {
                         e.preventDefault();
@@ -881,7 +881,7 @@ export default function CodeEditor({ params }) {
                 </ContextMenuContent>
             </ContextMenu>
             <AccordionContent>
-              <div className="ml-6 pl-1 border-l-[1px] pb-0">
+              <div className={"ml-6 pl-1 border-l-[1px] border-solid pb-0 " + (runFuctionFile === itemPath ? 'border-l-blue-500' : '')}>
                 {folderContents[itemPath] && (
                   <div key={`content-${itemPath}`} className="space-y-1">
                     {renderFileTree(folderContents[itemPath], itemPath)}

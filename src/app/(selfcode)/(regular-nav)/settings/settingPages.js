@@ -9,11 +9,10 @@ import { motion } from "framer-motion"
 import { useTheme } from "next-themes"
 import { toast } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-
-
-// json
-import defaultEditorValue from "@/app/values/defaultEditorValue.json"
 import { RefreshCw, Save } from "lucide-react"
+import defaultEditorValue from "@/app/values/defaultEditorValue.json"
+import { UserProfile } from "@clerk/nextjs"
+import "../clerkStyle.css"
 
 export function UserSettings() {
     return (
@@ -44,6 +43,7 @@ export function UserSettings() {
                         <Label className="font-semibold">Personal Information</Label>
                         <p className="text-sm text-muted-foreground">Manage your personal account information and preferences.</p>
                     </div>
+                    <UserProfile routing="hash" /> 
                 </motion.div>
             </TooltipProvider>
         </motion.div>

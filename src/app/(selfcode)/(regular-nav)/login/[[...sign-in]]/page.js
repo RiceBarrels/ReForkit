@@ -1,5 +1,6 @@
 "use client"
 import { SignIn } from '@clerk/nextjs'
+import '../../clerkStyle.css'
 
 export default function Page() {
 
@@ -7,5 +8,9 @@ export default function Page() {
   const searchParams = new URLSearchParams(window.location.search);
   const redirectUrl = searchParams.get('redirect_url');
 
-  return <SignIn fallbackRedirectUrl={redirectUrl} />
+  return (
+    <div className="flex justify-center items-center h-screen">
+      <SignIn fallbackRedirectUrl={redirectUrl} />
+    </div>
+  )
 }

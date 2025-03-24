@@ -197,7 +197,7 @@ export function UserRepositories() {
           Please sign in to view your repositories.
         </p>
         <Link 
-          href="/login"
+          href="/login?redirect_url=/editor"
           className="text-sm text-primary hover:underline mt-2 block"
         >
           Go to login →

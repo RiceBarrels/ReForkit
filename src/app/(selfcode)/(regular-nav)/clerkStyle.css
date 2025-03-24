@@ -1,0 +1,114 @@
+.cl-card{
+    background-color: hsl(var(--background));
+    border: 1px solid hsl(var(--input));
+    border-radius: 1rem;
+}
+.cl-headerTitle, .cl-headerSubtitle, .cl-socialButtonsBlockButtonText, .cl-formFieldLabel, .cl-dividerText {
+    color: hsl(var(--foreground));
+}
+.cl-cardBox {
+    box-shadow: none !important;
+    height: auto;
+    width: 100%;
+}
+.cl-cardBox * {
+    box-shadow: none !important;
+}
+.cl-scrollBox {
+    background-color: hsl(var(--background));
+}
+.cl-footer {
+    background: hsl(var(--background));
+    border: 1px solid hsl(var(--input));
+    border-top: 0px solid hsl(var(--input));
+    border-radius: 0px 0px 1rem 1rem;
+    padding: 1rem 0 0 0;
+    transform: translateY(-0.5rem);
+}
+.cl-profileSectionTitleText {
+    color: hsl(var(--muted-foreground));
+}
+.cl-profilePage * {
+    color: hsl(var(--foreground));
+}
+.cl-button {
+    background-color: hsl(var(--background));
+    border: 1px solid hsl(var(--input));
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: .875rem;
+    line-height: 1.25rem;
+    color: hsl(var(--foreground));
+}
+.cl-button:hover {
+    background-color: hsl(var(--input));
+    color: hsl(var(--foreground));
+}
+.cl-actionCard {
+    background-color: hsl(var(--background));
+    border: 1px solid hsl(var(--input));
+    border-radius: 0.5rem;
+    padding: 1.5rem 1rem;
+    font-size: .875rem;
+    line-height: 1.25rem;
+}
+.cl-socialButtonsProviderIcon {
+    background-color: #fff;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 4px;
+    border-radius: 8px;
+}
+
+.cl-socialButtonsBlockButton {
+    outline: 1px solid hsl(var(--input));
+    border-radius: 0.5rem;
+    padding: 0.50rem 2rem;
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+    transition-timing-function: cubic-bezier(.4, 0, .2, 1);
+    transition-duration: .15s;
+}
+
+.cl-socialButtonsBlockButton:hover {
+    background-color: hsl(var(--input));
+}
+
+.cl-formButtonPrimary {
+    background-color: hsl(var(--foreground));
+    color: hsl(var(--background));
+    border: 1px solid hsl(var(--background));
+    border-radius: 0.5rem;
+    isolation: unset;
+    padding: 0.75rem 2rem;
+    font-size: .875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+}
+
+.cl-formButtonPrimary:hover {
+    background-color: hsl(var(--foreground));
+    color: hsl(var(--background));
+}
+
+.cl-buttonArrowIcon{
+    display: none;
+}
+
+.cl-formFieldInput, .cl-otpCodeFieldInput {
+    background-color: hsl(var(--background));
+    outline: 1px solid hsl(var(--input));
+    padding: 0.5rem 1rem;
+    font-size: .875rem;
+    line-height: 1.25rem;
+    color: hsl(var(--foreground));
+}
+
+.cl-formFieldInput:focus, .cl-otpCodeFieldInput:focus {
+    border-color: hsl(var(--foreground));
+    background-color: hsl(var(--input));
+}
+
+.cl-navbar, .cl-navbarMobileMenuRow{
+    display: none;
+}
+
