@@ -61,6 +61,7 @@ import { getFileIcon } from '@/components/editor/GetIcon';
 import { toast } from "sonner";
 import { isImageFile, isVideoFile, isAudioFile } from '@/components/editor/FileKind';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, ContextMenuSeparator } from '@/components/ui/context-menu';
+import codeKinds from '@/app/values/codeKinds.json';
 
 function EditorPanel({ panel, children }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -1586,9 +1587,7 @@ export default function CodeEditor({ params }) {
               </Label>
               {settingsFile.codeKind === undefined || !allowedCodeKinds.includes(settingsFile.codeKind) ?
                 <Combobox
-                  datas={[
-                    { value: 'vanilla', label: 'Vanilla HTML + CSS + JS' }
-                  ]}
+                  datas={codeKinds}
                   datasName="Code Environment"
                   valueNow={config.codeKind}
                   onSelect={(selected) => {

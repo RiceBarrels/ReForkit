@@ -64,7 +64,7 @@ export function AppSidebar() {
           router.push(item.url);
         }
       });
-      if (e.key === "s" && (e.metaKey || e.ctrlKey) && pathname === "/search") {
+      if (e.key === "s" && (e.metaKey || e.ctrlKey) && pathname.startsWith("/search")) {
         e.preventDefault();
         document.getElementById("search-input").focus();
       }
@@ -259,12 +259,13 @@ export function AppSidebar() {
                       <SidebarMenuItem>
                         <Tooltip>
                           <TooltipTrigger asChild>
+                            
                             <SidebarMenuButton 
                               className={cn(
                                 "relative p-2",
-                                pathname === item.url && "before:absolute before:left-0 before:w-1 before:h-full before:bg-primary before:rounded-r animate-in"
+                                ((pathname.startsWith(item.url) && item.url !== "/") || (item.url === "/" && pathname === "/")) && "before:absolute before:left-0 before:w-1 before:h-full before:bg-primary before:rounded-r animate-in"
                               )} 
-                              data-active={`${pathname === item.url}`} 
+                              data-active={`${((pathname.startsWith(item.url) && item.url !== "/") || (item.url === "/" && pathname === "/"))}`} 
                               asChild
                             >
                               <Link href={item.url} className="flex items-center gap-3 text-sm">
@@ -275,7 +276,7 @@ export function AppSidebar() {
                                   <item.icon className={cn(
                                     "w-4 h-4",
                                     "transition-colors",
-                                    pathname === item.url ? "text-primary" : "text-muted-foreground"
+                                    ((pathname.startsWith(item.url) && item.url !== "/") || (item.url === "/" && pathname === "/")) ? "text-primary" : "text-muted-foreground"
                                   )} />
                                 </motion.div>
                                 <span>{item.title}</span>

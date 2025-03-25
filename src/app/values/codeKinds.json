@@ -1,0 +1,8 @@
+[
+    {
+        "name": "HTML + CSS + JS",
+        "value": "vanilla",
+        "description": "A basic HTML, CSS, and JavaScript environment for creating web pages.",
+        "icon": "img/html.svg"
+    }
+]

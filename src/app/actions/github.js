@@ -26,6 +26,58 @@ function decodeBase64UTF8(base64Text) {
   }
 }
 
+export async function getGitHubUserInfo() {
+  try {
+    const session = await auth();
+    const { userId } = session;
+    
+    if (!userId) {
+      return {
+        success: false,
+        message: 'User not authenticated'
+      };
+    }
+
+    const tokens = await getGitHubTokens(userId);
+    if (!tokens?.data || !Array.isArray(tokens.data) || tokens.data.length === 0) {
+      return {
+        success: false,
+        message: 'GitHub account not connected'
+      };
+    }
+
+    const githubToken = tokens.data[0]?.token;
+    if (!githubToken) {
+      return {
+        success: false,
+        message: 'No valid GitHub token found'
+      };
+    }
+
+    const octokit = new Octokit({ auth: githubToken });
+
+    const response = await octokit.request('GET /user', {
+      headers: {
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
+
+    console.log('github response', response.data);
+
+    return {
+      success: true,
+      user: response.data
+    };
+
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return {
+      success: false,
+      message: error.message || 'Failed to fetch user information'
+    };
+  }
+}
+
 export async function fetchGitHubRepos() {
   try {
     const session = await auth();
@@ -1114,5 +1166,149 @@ export async function IsRepoPrivate(owner, repo) {
   } catch (error) {
     console.error('GitHub API Error:', error);
     return false;
+  }
+}
+// {
+//   "codeKind": "vanilla",
+//   "repo": "claroes-outpost",
+//   "description": "",
+//   "visibility": "private",
+//   "readme": false,
+//   "owner": "RiceBarrels"
+// }
+export async function CreateRepo(codeKind, repo, description, visibility, readme, owner, autoSaveBranch) {
+  try {
+    const session = await auth();
+    const { userId } = session;
+    const tokens = await getGitHubTokens(userId);
+    const githubToken = tokens.data[0]?.token;
+    
+    if (!githubToken) {
+      return {
+        success: false,
+        message: 'No valid GitHub token found'
+      };
+    }
+
+    const octokit = new Octokit({ auth: githubToken });
+    
+    // Create the repository with auto_init set to readme
+    const response = await octokit.request('POST /user/repos', {
+      name: repo,
+      description: description,
+      private: visibility === 'private',
+      auto_init: readme, // Auto-initialize if readme is true
+      headers: {
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
+
+    // Add template files based on codeKind
+    if (codeKind === 'vanilla') {
+      await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
+        owner: response.data.owner.login,
+        repo: repo,
+        path: 'index.html',
+        message: 'Add index.html template',
+        content: Buffer.from(
+`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>My Project</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Hello World!</h1>
+  <script src="script.js"></script>
+</body>
+</html>`).toString('base64'),
+        branch: response.data.default_branch
+      });
+      
+      await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
+        owner: response.data.owner.login,
+        repo: repo,
+        path: 'style.css',
+        message: 'Add style.css template',
+        content: Buffer.from(
+`body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 20px;
+}`).toString('base64'),
+        branch: response.data.default_branch
+      });
+      
+      await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
+        owner: response.data.owner.login,
+        repo: repo,
+        path: 'script.js',
+        message: 'Add script.js template',
+        content: Buffer.from(
+`// Your JavaScript code goes here
+console.log("Hello from JavaScript!");`).toString('base64'),
+        branch: response.data.default_branch
+      });
+    }
+
+    // Update or create README if readme is true
+    if (readme) {
+      try {
+        // Try to fetch the existing README to get its SHA
+        const existingReadme = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+          owner: response.data.owner.login,
+          repo: repo,
+          path: 'README.md',
+          ref: response.data.default_branch
+        });
+        
+        await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
+          owner: response.data.owner.login,
+          repo: repo,
+          path: 'README.md',
+          message: 'Update README.md',
+          content: Buffer.from(`# ${repo}\n\n${description || 'A new repository created with Reforkit.'}`).toString('base64'),
+          branch: response.data.default_branch,
+          sha: existingReadme.data.sha
+        });
+      } catch (error) {
+        // If README is not found, create it without the SHA (this should rarely happen when auto_init is true)
+        await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
+          owner: response.data.owner.login,
+          repo: repo,
+          path: 'README.md',
+          message: 'Add README.md',
+          content: Buffer.from(`# ${repo}\n\n${description || 'A new repository created with Reforkit.'}`).toString('base64'),
+          branch: response.data.default_branch
+        });
+      }
+    }
+
+    // Create .reforkitSettings file
+    await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
+      owner: response.data.owner.login,
+      repo: repo,
+      path: '.reforkitSettings',
+      message: 'Add .reforkitSettings',
+      content: Buffer.from(JSON.stringify({
+        repoFullName: `${owner}/${repo}`,
+        codeKind: codeKind,
+        autoSaveBranch: autoSaveBranch,
+      }, null, 2)).toString('base64'),
+      branch: response.data.default_branch
+    });
+    
+    return {
+      success: true,
+      message: 'Repository created successfully',
+      repo: response.data
+    };
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message || 'Failed to create repository'
+    };
   }
 }
