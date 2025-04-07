@@ -55,8 +55,6 @@ export default function EditorNewPage() {
         },
         
         onSubmit: async ({ value }) => {
-            // Do something with form data
-            console.log(value)
             try {
                 const result = await CreateRepo(
                     value.codeKind,

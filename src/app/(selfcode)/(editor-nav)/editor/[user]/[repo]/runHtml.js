@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useRef } from "react";
 import { ExternalLink, RotateCw, SquareDashedMousePointer } from "lucide-react";
+import { toast } from "sonner";
 
 export default function RunHtml({ src }) {
     const [url, setUrl] = useState(src);
@@ -44,7 +45,9 @@ export default function RunHtml({ src }) {
             }
         } catch (error) {
             // Handle cross-origin security errors
-            console.log("Could not access iframe URL:", error);
+            toast.error("Could not access iframe URL", {
+                description: error.message
+            });
         }
     };
 
@@ -105,12 +108,13 @@ export default function RunHtml({ src }) {
                     </Button>
                 </div>
             </div>
-            <iframe 
-                ref={iframeRef}
-                src={url}
-                onLoad={handleIframeLoad}
-                className="w-full h-full border-0"
-                title="Reforkit - HTML Preview"
+            <div className="flex-1 flex items-center justify-center mx-1 rounded-md ">
+                <iframe 
+                    ref={iframeRef}
+                    src={url}
+                    onLoad={handleIframeLoad}
+                    className="w-full h-full bg-white rounded-md border border-accent"
+                    title="Reforkit - HTML Preview"
                 sandbox="allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-downloads-without-user-activation allow-presentation allow-orientation-lock allow-scripts"
                 allow="accelerometer; ambient-light-sensor; autoplay; battery; camera; display-capture; encrypted-media; execution-while-not-rendered; execution-while-out-of-viewport; fullscreen; gamepad; geolocation; gyroscope; layout-animations; legacy-image-formats; magnetometer; microphone; midi; navigation-override; oversized-images; payment; picture-in-picture; publickey-credentials; speaker-selection; sync-xhr; unoptimized-images; unsized-media; usb; screen-wake-lock; web-share; xr-spatial-tracking; clipboard-read; clipboard-write"
                 allowFullScreen={true}
@@ -118,6 +122,7 @@ export default function RunHtml({ src }) {
                 allowpaymentrequest="true"
                 allowpopups="true"
             />
+            </div>
         </div>
     );
 }

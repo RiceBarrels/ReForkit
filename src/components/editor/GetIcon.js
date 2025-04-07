@@ -5,7 +5,7 @@ import { FaGolang } from "react-icons/fa6";
 import { SiTypescript, SiKotlin } from 'react-icons/si';
 import { LuFileJson } from 'react-icons/lu';
 import { BiFontFamily } from 'react-icons/bi';
-import { Info, PlayCircle, Music, FileText, Plus, Settings, Eye } from 'lucide-react';
+import { Info, PlayCircle, Music, FileText, Plus, Settings, Eye, SquarePlus } from 'lucide-react';
 
 export const getFileIcon = (name) => {
     const extension = name.split('.').pop().toLowerCase();
@@ -98,10 +98,12 @@ export const getFileIcon = (name) => {
       //replit files
       case 'replit':
         return <img src="/replit.png" width={16} height={16} alt="Replit" />;
-      case 'replitutilitytab':
+      case 'reforkitutilitytab':
         return <Settings size={16}/>;
       case 'reforkitpreviewtab':
         return <Eye size={16}/>;
+      case 'reforkitnewtab':
+        return <SquarePlus size={16}/>;
       default:
         return <FileText size={16}/>;
     }

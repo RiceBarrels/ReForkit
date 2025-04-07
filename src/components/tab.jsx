@@ -59,8 +59,8 @@ export function SortableTab({ id, className, name, path, panelId, onClose, onCli
     return (
       <div
         ref={setNodeRef}
-        style={style}
-        className={`flex items-center ml-1 my-0.5 rounded-md bg-[#88888820] backdrop-blur-md border border-[#88888820] cursor-pointer hover:bg-[#88888830] hover:border-[#88888830] hover:scale-105 active:scale-100 active:bg-[#88888840] active:border-[#88888840] active:z-10 group duration-150 ease-in-out ${
+          style={style}
+          className={`flex items-center ml-1 my-0.5 rounded-md bg-[#88888820] backdrop-blur-md border border-[#88888820] cursor-pointer hover:bg-[#88888830] hover:border-[#88888830] hover:scale-105 active:scale-100 active:bg-[#88888840] active:border-[#88888840] active:z-10 group transition-all duration-150 ease-in-out ${
           active ? 'bg-[#88888840!important] border-[#88888840!important]' : ''
         } ${className}`}
       >
@@ -209,10 +209,16 @@ export function EmptyTab({ files, folderContents, loadingFolders, handleFileClic
   }
 
   // Add this new component for the drag overlay
-export function DragOverlayTab({ name }) {
+export function DragOverlayTab({ name, className }) {
   return (
-    <div className="flex items-center ml-1 my-1 rounded-md bg-[#88888840] border border-[#88888840] px-4 py-2 shadow-lg backdrop-blur-sm cursor-pointer opacity-95 pointer-events-none">
-      <span className="truncate text-sm max-w-[150px]">{name}</span>
+    <div className={`flex items-center ml-1 my-1 rounded-md bg-[#88888840] border border-[#88888840] px-4 py-2 shadow-lg backdrop-blur-sm cursor-pointer pointer-events-none ${className}`}>
+      <div className="flex items-center gap-2">
+        {getFileIcon(name)}
+        <span className="truncate text-sm max-w-[150px]">{name}</span>
+        <div className="hover:bg-accent-foreground/10 rounded transition-all duration-150 ease-in-out">
+          <IoClose size={14}/>
+        </div>
+      </div>
     </div>
   );
 }

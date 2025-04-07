@@ -225,10 +225,6 @@ export default function GithubProjectPage({ params }) {
         fetchData();
     }, [resolvedParams.username, resolvedParams.project]);
 
-    useEffect(() => {
-        console.log(data)
-    }, [data])
-
     // Update the handleFileClick function
     const handleFileClick = async (file) => {
         try {
@@ -465,7 +461,6 @@ export default function GithubProjectPage({ params }) {
                                 if (user) {
                                     setIsForking(true);
                                     const result = await forkRepository(resolvedParams.username, resolvedParams.project);
-                                    console.log(result)
                                     if (result.success) {
                                         // redirect to editor
                                         router.push(`/editor/${result.response.data.full_name}`);

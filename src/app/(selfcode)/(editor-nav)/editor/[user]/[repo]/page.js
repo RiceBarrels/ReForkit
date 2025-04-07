@@ -34,7 +34,7 @@ import {
   SidebarGroupLabel,
   SidebarMenu
 } from "@/components/ui/sidebar";
-import { getGitHubContents, getDefaultBranch, getBranches, createBranch, renameFolder, createFile, createFolder, deleteFolder, rePathFile, IsRepoPrivate } from '@/app/actions/github';
+import { getGitHubContents, getDefaultBranch, getBranches, createBranch, renameFolder, createFile, createFolder, deleteFolder, rePathFile, IsRepoPrivate, deleteFile } from '@/app/actions/github';
 import { DndContext, DragOverlay} from "@dnd-kit/core";
 import {
   useSensor,
@@ -56,7 +56,6 @@ import { Combobox } from '@/components/ui/comboBox';
 import { motion, useAnimationFrame } from 'framer-motion';
 import { Editor } from '@monaco-editor/react';
 import { useTheme } from "next-themes";
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { getFileIcon } from '@/components/editor/GetIcon';
 import { toast } from "sonner";
 import { isImageFile, isVideoFile, isAudioFile } from '@/components/editor/FileKind';
@@ -144,6 +143,7 @@ export default function CodeEditor({ params }) {
   const [editingNewFolderPath, setEditingNewFolderPath] = useState(null);
   const [editingNewFilePath, setEditingNewFilePath] = useState(null);
   const [openedFolders, setOpenedFolders] = useState([]);
+  const [isNavFocused, setIsNavFocused] = useState(false);
 
   // Add this helper function (for example, near the top of your CodeEditor component)
   const getParentPath = (path) => {
@@ -192,7 +192,6 @@ export default function CodeEditor({ params }) {
     } finally {
       if (path === '') {
         setSidebarLoading(false);
-        setIsFirstLoad(false);
       } else {
         setLoadingFolders(prev => ({ ...prev, [path]: false }));
       }
@@ -202,6 +201,9 @@ export default function CodeEditor({ params }) {
   // Update handleFileClick to handle video and audio files
   const handleFileClick = async (file) => {
     try {
+      // First, set isFirstLoad to false since we're loading a file
+      setIsFirstLoad(false);
+      
       // Check if tab already exists in any panel
       let existingPanel;
       let existingTab;
@@ -479,12 +481,12 @@ export default function CodeEditor({ params }) {
                 tab.type === 'preview' 
                   ? {
                       ...tab,
-                      content: { src: `/github/${owner}/${repo}/${settingsData.autoSaveBranch}/run/` }
+                      content: { src: `/github/${owner}/${repo}/${settingsData.autoSaveBranch}/run/index.html` }
                   }
                 : tab
               ),
               currentContent: panel.currentContent.type === 'preview' 
-                ? { type: 'preview', src: `/github/${owner}/${repo}/${settingsData.autoSaveBranch}/run/` }
+                ? { type: 'preview', src: `/github/${owner}/${repo}/${settingsData.autoSaveBranch}/run/index.html` }
                 : panel.currentContent
             })));
           }
@@ -530,14 +532,24 @@ export default function CodeEditor({ params }) {
 
           if (defaultBranchResult.success && settingsResult.success) {
             setDefaultBranch(defaultBranchResult.default_branch);
-            setPanelGroups(prev => prev.map(panel => ({
-              ...panel,
-              activeTab: 'preview.reforkitpreview',
-              currentContent: {
-                type: 'preview',
-                src: `${owner}/${repo}/${settingsData.autoSaveBranch}/run/`
+            // Update only panels that contain a preview tab so that the preview is active.
+            setPanelGroups(prev => prev.map(panel => {
+              const previewTab = panel.tabs.find(tab => tab.type === 'preview');
+              if (previewTab) {
+                return {
+                  ...panel,
+                  activeTab: previewTab.path, // Active tab now matches the preview tab's key
+                  currentContent: {
+                    type: 'preview',
+                    src: `/github/${owner}/${repo}/${settingsData.autoSaveBranch}/run/index.html`
+                  }
+                };
               }
-            })));
+              return panel;
+            }));
+            // Optionally, make sure the panel with the preview tab is the active panel.
+            setActivePanelId(2); // (Assuming panel 2 is the one that contains the preview tab)
+            
             // Only fetch directory after we have the branch
             const result = await getGitHubContents(owner, repo, '', settingsData.autoSaveBranch, true, isRepoPrivate);
             if (!result.success) {
@@ -559,6 +571,8 @@ export default function CodeEditor({ params }) {
           setError(err.message);
         } finally {
           setSidebarLoading(false);
+          // Mark first load as complete after initialization
+          setIsFirstLoad(false);
         }
       }
     };
@@ -623,6 +637,8 @@ export default function CodeEditor({ params }) {
       return () => clearTimeout(timer);
     }
   }, [editingNewFolderPath, loadingFolders, folderContents]);
+
+  
   
 
   // Log renderFileTree to the console
@@ -857,7 +873,7 @@ export default function CodeEditor({ params }) {
                         input.focus();
                         input.select();
                       }
-                    }, 0);
+                    }, 250);
                   }}>
                     <Pencil size={14}/>
                     <span className="text-sm">Rename</span>
@@ -1060,7 +1076,21 @@ export default function CodeEditor({ params }) {
               <Pencil size={14}/>
               <span className="text-sm">Rename</span>
             </ContextMenuItem>
-            <ContextMenuItem className="flex items-center gap-2 text-red-500">
+            <ContextMenuItem className="flex items-center gap-2 text-red-500" onClick={async ()=>{
+              try {
+                const deleteResult = await deleteFile(owner, repo, itemPath, settingsFile.autoSaveBranch);
+                if (deleteResult.success) {
+                  toast.success("File deleted successfully");
+                  fetchDirectory(getParentPath(itemPath));
+                } else {
+                  throw new Error(deleteResult.message);
+                }
+              } catch (error) {
+                toast.error("Failed to delete file", {
+                  description: error
+                });
+              }
+            }}>
               <Trash size={14}/>
               <span className="text-sm">Delete</span>
             </ContextMenuItem>
@@ -1088,14 +1118,15 @@ export default function CodeEditor({ params }) {
             try {
               const response = await createFolder(owner, repo, currentPath, e.target.value, settingsFile.autoSaveBranch);
               if (!response.success) {
-                toast.error('Failed to create folder');
-                throw new Error('Failed to create folder');
+                throw new Error(response.message);
               } else {
                 toast.success('Folder created successfully');
                 fetchDirectory(currentPath);
               }
             } catch (error) {
-              toast.error('Failed to create folder');
+              toast.error('Failed to create folder', {
+                description: error
+              });
             }
           }}
           onFocus={(e) => {
@@ -1156,7 +1187,9 @@ export default function CodeEditor({ params }) {
                 fetchDirectory(currentPath);
               }
             } catch (error) {
-              toast.error('Failed to create file');
+              toast.error('Failed to create file', {
+                description: error
+              });
             }
           }}
           onFocus={(e) => {
@@ -1434,7 +1467,7 @@ export default function CodeEditor({ params }) {
     
     // Build the preview URL based on whether currentPath ends with "html".
     const previewSrc = `/github/${owner}/${repo}/${settingsFile.autoSaveBranch}/run/${
-      currentPath && currentPath.split('.').pop() === 'html' ? currentPath : ''
+      currentPath && currentPath.split('.').pop() === 'html' ? currentPath : 'index.html'
     }?t=${Date.now()}`;
     
     // Check if a preview tab already exists.
@@ -1554,7 +1587,7 @@ export default function CodeEditor({ params }) {
     router.push('/login?redirect_url=/editor/' + owner + '/' + repo);
     content = null;
   } else if (sidebarLoading && isFirstLoad) {
-    // Sidebar still loading
+    // Only show the full-screen loading during the first load
     content = (
       <div className="flex flex-col justify-center items-center w-screen h-screen" onContextMenu={(e) => e.preventDefault()}>
         <Loader2 className="w-4 h-4 animate-spin"/>
@@ -1655,7 +1688,7 @@ export default function CodeEditor({ params }) {
                   maxSize={50}
                   collapsible={true}
               >
-                  <Sidebar className="h-full w-full bg-background" collapsible="none">
+                  <Sidebar className="h-full w-full bg-background" collapsible="none" onFocus={() => setIsNavFocused(true)} onBlur={() => setIsNavFocused(false)}>
                       <TooltipProvider delayDuration={100} skipDelayDuration={100}>
                           <SidebarContent className="h-full">
                               <SidebarGroup className="h-full p-0  overflow-hidden">
@@ -1666,7 +1699,21 @@ export default function CodeEditor({ params }) {
                                       <div className="flex items-center gap-0.5 py-0.5 justify-center">
                                         <Tooltip>
                                           <TooltipTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="w-8 h-8">
+                                            <Button 
+                                              variant="ghost" 
+                                              size="icon" 
+                                              className="w-8 h-8"
+                                              onClick={() => {
+                                                setEditingNewFolderPath("");
+                                                setTimeout(() => {
+                                                  const input = document.getElementById(`-new-folder-input`);
+                                                  if (input) {
+                                                    input.focus();
+                                                    input.select();
+                                                  }
+                                                }, 250);
+                                              }}
+                                            >
                                               <FolderPlus size={16}/>
                                             </Button>
                                           </TooltipTrigger>
@@ -1674,7 +1721,21 @@ export default function CodeEditor({ params }) {
                                         </Tooltip>
                                         <Tooltip>
                                           <TooltipTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="w-8 h-8">
+                                            <Button 
+                                              variant="ghost" 
+                                              size="icon" 
+                                              className="w-8 h-8"
+                                              onClick={() => {
+                                                setEditingNewFilePath("");
+                                                setTimeout(() => {
+                                                  const input = document.getElementById(`-new-file-input`);
+                                                  if (input) {
+                                                    input.focus();
+                                                    input.select();
+                                                  }
+                                                }, 250);
+                                              }}
+                                            >
                                               <FilePlus size={16}/>
                                             </Button>
                                           </TooltipTrigger>
@@ -1727,38 +1788,32 @@ export default function CodeEditor({ params }) {
                                                     </div>
                                                   </AccordionTrigger>
                                                   <AccordionContent 
-                                                    parentClassName={"flex-1 mx-1 mt-2 overflow-auto border border-transparent rounded-md "}
+                                                    parentClassName={"flex-1 mx-1 overflow-auto border border-transparent rounded-md "}
                                                   >
-                                                      {sidebarLoading && !folderContents[currentPath] ? (
-                                                          <div className="flex justify-center py-4">
-                                                              <Loader2 className="w-4 h-4 animate-spin"/>
-                                                          </div>
-                                                      ):(
-                                                          <div className="space-y-1 flex">
-                                                            <ContextMenu>
-                                                              <ContextMenuTrigger asChild>
-                                                                  <div 
-                                                                    className="min-w-6 min-h-full"
-                                                                onClick={() => {
-                                                                  setRunFuctionFile("");
-                                                                }}
-                                                                  onContextMenu={() => {
-                                                                    setRunFuctionFile("");
-                                                                  }}
-                                                                />
-                                                              </ContextMenuTrigger>
-                                                              <ContextMenuContent>
-                                                                <ContextMenuItem>
-                                                                  <FolderGit2 size={16}/>
-                                                                  <span>New Folder</span>
-                                                                </ContextMenuItem>
-                                                              </ContextMenuContent>
-                                                            </ContextMenu>
-                                                            <div className="w-[calc(100%-1.5rem)] border-l border-accent pl-1">
-                                                              {renderFileTree(files)}
-                                                            </div>
-                                                          </div>
-                                                      )}
+                                                    <div className="flex">
+                                                      <ContextMenu>
+                                                        <ContextMenuTrigger asChild>
+                                                            <div 
+                                                              className="min-w-6 min-h-full"
+                                                          onClick={() => {
+                                                            setRunFuctionFile("");
+                                                          }}
+                                                            onContextMenu={() => {
+                                                              setRunFuctionFile("");
+                                                            }}
+                                                          />
+                                                        </ContextMenuTrigger>
+                                                        <ContextMenuContent>
+                                                          <ContextMenuItem>
+                                                            <FolderGit2 size={16}/>
+                                                            <span>New Folder</span>
+                                                          </ContextMenuItem>
+                                                        </ContextMenuContent>
+                                                      </ContextMenu>
+                                                      <div className={"w-[calc(100%-1.5rem)] border-l border-accent pl-1 mt-0 " + (runFuctionFile === "" ? "border-blue-500 " : "")}>
+                                                        {renderFileTree(files)}
+                                                      </div>
+                                                    </div>
                                                   </AccordionContent>
                                               </AccordionItem>
                                           </Accordion>
@@ -1950,10 +2005,6 @@ export default function CodeEditor({ params }) {
                               </div>
                             </div>
                             <DragOverlay 
-                              dropAnimation={{
-                                duration: 150,
-                                easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
-                              }}
                               
                               className="opacity-95 pointer-events-none"
                             >

@@ -20,7 +20,7 @@ export default clerkMiddleware({
   debug: true,
 
   beforeAuth: (req) => {
-    console.log('Current server time:', new Date().toISOString());
+    
   }
 });
 

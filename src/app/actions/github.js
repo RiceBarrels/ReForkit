@@ -1312,3 +1312,103 @@ console.log("Hello from JavaScript!");`).toString('base64'),
     };
   }
 }
+
+export async function moveFile(owner="", repo="", path=[], newPath="", branch="") {
+  try {
+    const session = await auth();
+    const { userId } = session;
+    const tokens = await getGitHubTokens(userId);
+    const githubToken = tokens.data[0]?.token;
+
+    if (!githubToken) {
+      return {
+        success: false,
+        message: 'No valid GitHub token found'
+      };
+    }
+
+    const octokit = new Octokit({ auth: githubToken });
+
+    // Get default branch if not provided
+    let targetBranch = branch;
+    if (!targetBranch) {
+      const defaultBranchResult = await getDefaultBranch(owner, repo);
+      if (!defaultBranchResult.success) {
+        return {
+          success: false,
+          message: 'Failed to determine default branch'
+        };
+      }
+      targetBranch = defaultBranchResult.default_branch;
+    }
+
+    // Process each path in the array
+    for (const sourcePath of path) {
+      // Remove any leading slashes from paths
+      const cleanSourcePath = sourcePath.replace(/^\/+/, '').replace(/^%2F+/i, '');
+      const fileName = cleanSourcePath.split('/').pop();
+      const cleanNewPath = (newPath + '/' + fileName).replace(/^\/+/, '').replace(/^%2F+/i, '');
+
+      try {
+        // Get the existing file details (SHA and content)
+        const fileResponse = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+          owner,
+          repo,
+          path: cleanSourcePath,
+          ref: targetBranch
+        });
+
+        if (Array.isArray(fileResponse.data)) {
+          // This is a directory, handle recursively
+          const result = await renameFolder(owner, repo, cleanSourcePath, cleanNewPath, targetBranch);
+          if (!result.success) {
+            return result;
+          }
+          continue;
+        }
+
+        const fileSha = fileResponse.data.sha;
+        const fileContent = fileResponse.data.content; // base64 encoded content
+
+        // Create the file in the new location
+        await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
+          owner,
+          repo,
+          path: cleanNewPath,
+          message: `Move ${fileName} to ${newPath} via Reforkit: ${new Date().toISOString()}`,
+          content: fileContent,
+          branch: targetBranch
+        });
+
+        // Delete the old file
+        await octokit.request('DELETE /repos/{owner}/{repo}/contents/{path}', {
+          owner,
+          repo,
+          path: cleanSourcePath,
+          message: `Remove ${fileName} after moving to ${newPath} via Reforkit: ${new Date().toISOString()}`,
+          sha: fileSha,
+          branch: targetBranch
+        });
+
+      } catch (error) {
+        console.error(`Error moving ${sourcePath}:`, error);
+        return {
+          success: false,
+          message: error.response?.data?.message || error.message || `Failed to move ${sourcePath}`
+        };
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Files moved successfully'
+    };
+
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message || 'Failed to move files'
+    };
+  }
+}
