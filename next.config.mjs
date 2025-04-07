@@ -1,12 +1,10 @@
 import removeImports from 'next-remove-imports';
 import MonacoWebpackPlugin from "monaco-editor-webpack-plugin";
-import withTMFactory from "next-transpile-modules";
-
-const withTM = withTMFactory(["monaco-editor"]);
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  webpack: (config) => {
+const baseConfig = {
+  transpilePackages: ['monaco-editor'],
+  webpack: (config, { isServer }) => {
     // Add CSS loader configuration
     config.module.rules.push({
       test: /\.css$/,
@@ -22,28 +20,6 @@ const nextConfig = {
       ],
     });
     
-    return config;
-  },
-};
-
-const removeImportsConfig = removeImports({
-  ...nextConfig,
-  experimental: { esmExternals: true }
-});
-
-const configWithMonaco = withTM({
-  ...removeImportsConfig,
-  webpack: (config, { isServer }) => {
-    // Add the CSS loader first
-    config.module.rules.push({
-      test: /\.css$/,
-      use: [
-        'style-loader',
-        'css-loader',
-        'postcss-loader'
-      ],
-    });
-
     if (!isServer) {
       config.plugins.push(
         new MonacoWebpackPlugin({
@@ -54,6 +30,11 @@ const configWithMonaco = withTM({
     }
     return config;
   },
+};
+
+const removeImportsConfig = removeImports({
+  ...baseConfig,
+  experimental: { esmExternals: true }
 });
 
-export default configWithMonaco;
+export default removeImportsConfig;
